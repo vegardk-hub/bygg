@@ -9,11 +9,21 @@ import { navngiLandsbyer } from './navn.js';
 import { T, START } from './data/terreng.js';
 import {
   START_LAGER, AVDEKK, BYGG, BYGG_KOSTVEKST, NIVAA, OPPGRADER_KOSTVEKST, MAKS_NIVAA, PRIS, FUNN,
-  RAVARE_REKKEFOLGE,
+  RAVARE_REKKEFOLGE, VEI, LANDSBY, MARKED,
 } from './data/balanse.js';
 import { MAAL, SYNLIGE_MAAL } from './data/maal.js';
+import {
+  kanHaVei, nettverk, handelsruter, kobletTilLeiren, finnVeiTilLeiren, stedNavn, naboer4, stederINettet,
+} from './veinett.js';
+import { blandSeed, lagTilfeldig } from './rng.js';
 
-export const SPILL_VERSJON = 1;
+export const SPILL_VERSJON = 2;
+
+/** Statistikk-feltene. Nye felt får 0 når en gammel lagring lastes. */
+export const TOM_STAT = {
+  avdekket: 0, bygget: 0, oppgradert: 0, solgt: 0, skatter: 0, landsbyer: 0, tjent: 0, dager: 0, gardNabo: 0,
+  veier: 0, broer: 0, steinveier: 0, handel: 0, matLevert: 0, kobletLandsbyer: 0, storsteLandsby: 1,
+};
 
 // ---------------------------------------------------------------------------
 // Oppstart
@@ -29,7 +39,10 @@ export function nyttSpill(seed, str = 32) {
     bygg: new Map(),
     brukt: new Set(),         // skatter og bærbusker som er hentet
     maalFerdig: new Set(),
-    stat: { avdekket: 0, bygget: 0, oppgradert: 0, solgt: 0, skatter: 0, landsbyer: 0, tjent: 0, dager: 0, gardNabo: 0 },
+    veier: new Map(),         // rute → 'tre' | 'stein'
+    flytt: [],                // [fra, til] for dyr som har flyttet seg (til = -1: gått inn i skogen)
+    landsbyer: new Map(),     // rute → { str, mat, priser: { vare: faktor } } for landsbyer man har funnet
+    stat: { ...TOM_STAT },
   };
   const r = START.avdekketRadius;
   for (let dy = -r; dy <= r; dy++) {
@@ -46,7 +59,16 @@ export function nyttSpill(seed, str = 32) {
 export function lagVerden(spill) {
   const verden = genererVerden(spill.seed, { bredde: spill.str, hoyde: spill.str });
   verden.landsbynavn = navngiLandsbyer(verden);
+  // Dyr som har flyttet seg, flyttes på nytt i samme rekkefølge.
+  for (const [fra, til] of spill.flytt ?? []) flyttOverlegg(verden, fra, til);
   return verden;
+}
+
+function flyttOverlegg(verden, fra, til) {
+  const o = verden.overlegg.get(fra);
+  if (!o) return;
+  verden.overlegg.delete(fra);
+  if (til >= 0) verden.overlegg.set(til, o);
 }
 
 // ---------------------------------------------------------------------------
@@ -122,6 +144,7 @@ export function avdekk(spill, verden, i) {
     hendelser.push({ type: 'funn', i, tekst: `Bær! +${FUNN.baer.korn} 🌾`, gave: { ...FUNN.baer } });
   } else if (o?.type === 'landsby') {
     spill.stat.landsbyer++;
+    landsby(spill, verden, i);
     hendelser.push({ type: 'funn', i, tekst: `Du fant landsbyen ${verden.landsbynavn.get(i)}! 🏘️` });
   }
   return hendelser.concat(sjekkMaal(spill));
@@ -140,7 +163,7 @@ const OPPTAR_RUTA = ['landsby', 'dyr', 'malm'];
 
 /** Hvilke bygg kan stå på denne ruta (uansett om man har råd)? */
 export function muligeBygg(spill, verden, i) {
-  if (!spill.avdekket[i] || spill.bygg.has(i) || OPPTAR_RUTA.includes(verden.overlegg.get(i)?.type)) return [];
+  if (!spill.avdekket[i] || spill.bygg.has(i) || spill.veier.has(i) || OPPTAR_RUTA.includes(verden.overlegg.get(i)?.type)) return [];
   return Object.entries(BYGG)
     .filter(([, b]) => b.kanBygges && b.paa.includes(verden.terreng[i]))
     .map(([type]) => type);
@@ -200,6 +223,7 @@ export function inntektPerDag(spill, verden) {
   for (const i of spill.bygg.keys()) {
     for (const [r, n] of Object.entries(produksjon(spill, verden, i).gave)) sum[r] += n;
   }
+  for (const rute of handelsruter(spill, verden)) sum.mynter += rute.mynter;
   return sum;
 }
 
@@ -210,10 +234,199 @@ export function nyDag(spill, verden) {
     gi(spill, gave);
     hendelser.push({ type: 'produsert', i, gave });
   }
+  for (const rute of handelsruter(spill, verden)) {
+    gi(spill, { mynter: rute.mynter });
+    spill.stat.handel += rute.mynter;
+    hendelser.push({ type: 'handel', ...rute });
+  }
+  // Markedsprisene henter seg inn over natta.
+  for (const l of spill.landsbyer.values()) {
+    for (const vare of Object.keys(l.priser)) l.priser[vare] += (1 - l.priser[vare]) * MARKED.gjenopprettingPerDag;
+  }
   spill.dag++;
   spill.stat.dager++;
   return [{ type: 'nyDag', dag: spill.dag }, ...hendelser].concat(sjekkMaal(spill));
 }
+
+// ---------------------------------------------------------------------------
+// Veier
+// ---------------------------------------------------------------------------
+export { kanHaVei, handelsruter, kobletTilLeiren, stedNavn, stederINettet };
+
+export function veiKost(verden, i) {
+  return verden.terreng[i] === T.VANN ? { ...VEI.tre.bruKost } : { ...VEI.tre.kost };
+}
+
+export function steinKost(verden, i) {
+  return verden.terreng[i] === T.VANN ? { ...VEI.stein.bruKost } : { ...VEI.stein.kost };
+}
+
+const sum = (kostnader) => kostnader.reduce((acc, k) => {
+  for (const [r, n] of Object.entries(k)) acc[r] = (acc[r] || 0) + n;
+  return acc;
+}, {});
+
+/** Sammenligner handelsrutene før og etter en endring og melder om nye ruter. */
+function nyeRuter(spill, verden, for_) {
+  const kjente = new Set(for_.map((r) => `${r.a}-${r.b}`));
+  const ut = [];
+  for (const r of handelsruter(spill, verden)) {
+    if (kjente.has(`${r.a}-${r.b}`)) continue;
+    ut.push({ type: 'nyRute', ...r, tekst: `Ny handelsrute: ${stedNavn(spill, verden, r.a)} ↔ ${stedNavn(spill, verden, r.b)}! +${r.mynter} 🪙 per dag` });
+  }
+  return ut;
+}
+
+function oppdaterKoblet(spill, verden) {
+  let n = 0;
+  for (const i of verden.landsbynavn.keys()) if (spill.avdekket[i] && kobletTilLeiren(spill, verden, i)) n++;
+  spill.stat.kobletLandsbyer = Math.max(spill.stat.kobletLandsbyer, n);
+}
+
+/** Et dyr som står i veien, rusler til nærmeste ledige eng- eller skogrute. */
+function flyttDyr(spill, verden, i) {
+  const o = verden.overlegg.get(i);
+  const B = verden.bredde;
+  const ledig = (j) => (verden.terreng[j] === T.GRESS || verden.terreng[j] === T.SKOG)
+    && !verden.overlegg.has(j) && !spill.bygg.has(j) && !spill.veier.has(j) && j !== i;
+  let til = -1, best = Infinity;
+  for (let dy = -4; dy <= 4; dy++) {
+    for (let dx = -4; dx <= 4; dx++) {
+      const x = (i % B) + dx, y = Math.floor(i / B) + dy;
+      if (x < 0 || y < 0 || x >= B || y >= verden.hoyde) continue;
+      const j = y * B + x, d = Math.hypot(dx, dy);
+      if (ledig(j) && d < best) { best = d; til = j; }
+    }
+  }
+  flyttOverlegg(verden, i, til);
+  spill.flytt.push([i, til]);
+  const navn = o.art === 'hjort' ? 'Hjorten' : 'Sauen';
+  return { type: 'dyrFlytter', fra: i, til, tekst: til >= 0 ? `${navn} ruslet litt unna veien 🐾` : `${navn} gikk inn i skogen 🌲` };
+}
+
+function leggVei(spill, verden, i, hendelser) {
+  if (verden.overlegg.get(i)?.type === 'dyr') hendelser.push(flyttDyr(spill, verden, i));
+  spill.veier.set(i, 'tre');
+  spill.stat.veier++;
+  if (verden.terreng[i] === T.VANN) spill.stat.broer++;
+}
+
+export function byggVei(spill, verden, i) {
+  if (!kanHaVei(spill, verden, i)) return [{ type: 'feil', tekst: 'Her kan det ikke bygges vei.' }];
+  const kost = veiKost(verden, i);
+  if (!harRad(spill, kost)) return [{ type: 'feil', tekst: 'Du har ikke nok til veien.', mangler: kost }];
+  const for_ = handelsruter(spill, verden);
+  trekk(spill, kost);
+  const dyr = [];
+  leggVei(spill, verden, i, dyr);
+  oppdaterKoblet(spill, verden);
+  return [{ type: 'vei', ruter: [i] }, ...dyr, ...nyeRuter(spill, verden, for_)].concat(sjekkMaal(spill));
+}
+
+/** Billigste vei fra en landsby til leirens nett: hvilke ruter, og hva det koster. */
+export function veiTilLeirenPlan(spill, verden, i) {
+  const plan = finnVeiTilLeiren(spill, verden, i);
+  if (!plan) return null;
+  return { ...plan, kost: sum(plan.ruter.map((r) => veiKost(verden, r))) };
+}
+
+export function byggVeiTilLeiren(spill, verden, i) {
+  const plan = veiTilLeirenPlan(spill, verden, i);
+  if (!plan) return [{ type: 'feil', tekst: 'Fant ingen vei dit ennå – avdekk mer av kartet mellom landsbyen og leiren.' }];
+  if (!plan.ruter.length) return [{ type: 'feil', tekst: 'Landsbyen er allerede koblet til leiren.' }];
+  if (!harRad(spill, plan.kost)) return [{ type: 'feil', tekst: 'Du har ikke nok til hele veien.', mangler: plan.kost }];
+  const for_ = handelsruter(spill, verden);
+  trekk(spill, plan.kost);
+  const dyr = [];
+  for (const r of plan.ruter) leggVei(spill, verden, r, dyr);
+  oppdaterKoblet(spill, verden);
+  return [{ type: 'vei', ruter: plan.ruter }, ...dyr, ...nyeRuter(spill, verden, for_)].concat(sjekkMaal(spill));
+}
+
+/** Treveiene i samme nett som rute i (for «gjør hele veien om til stein»). */
+export function treveierINettet(spill, verden, i) {
+  const nett = nettverk(spill, verden);
+  const nr = nett.get(i);
+  return [...spill.veier].filter(([j, type]) => type === 'tre' && nett.get(j) === nr).map(([j]) => j);
+}
+
+export function steinKostFor(verden, ruter) {
+  return sum(ruter.map((r) => steinKost(verden, r)));
+}
+
+/** Gjør treveier om til steinvei. `ruter` = én rute eller hele nettet. */
+export function oppgraderVei(spill, verden, ruter) {
+  ruter = ruter.filter((r) => spill.veier.get(r) === 'tre');
+  if (!ruter.length) return [{ type: 'feil', tekst: 'Det er ingen trevei å oppgradere her.' }];
+  const kost = steinKostFor(verden, ruter);
+  if (!harRad(spill, kost)) return [{ type: 'feil', tekst: 'Du har ikke nok stein.', mangler: kost }];
+  trekk(spill, kost);
+  for (const r of ruter) spill.veier.set(r, 'stein');
+  spill.stat.steinveier += ruter.length;
+  return [{ type: 'steinvei', ruter }].concat(sjekkMaal(spill));
+}
+
+// ---------------------------------------------------------------------------
+// Landsbyer: vekst og marked
+// ---------------------------------------------------------------------------
+/** Tilstanden til en landsby (lages første gang den trengs). */
+export function landsby(spill, verden, i) {
+  if (!spill.landsbyer.has(i)) {
+    // Hver landsby kjøper to av varene – bestemt av verdenen, så det er likt hver gang.
+    const tilf = lagTilfeldig(blandSeed(verden.seed, 'marked', i));
+    const varer = tilf.stokk(Object.keys(MARKED.pris)).slice(0, 2);
+    spill.landsbyer.set(i, { str: 1, mat: 0, priser: Object.fromEntries(varer.map((v) => [v, 1])) });
+  }
+  return spill.landsbyer.get(i);
+}
+
+export function giMat(spill, verden, i) {
+  const l = landsby(spill, verden, i);
+  if (!kobletTilLeiren(spill, verden, i)) return [{ type: 'feil', tekst: 'Bygg vei til landsbyen først, så maten kommer fram.' }];
+  if (l.str >= LANDSBY.maksStorrelse) return [{ type: 'feil', tekst: 'Landsbyen er så stor den kan bli!' }];
+  const n = Math.min(LANDSBY.leveranse, spill.lager.korn || 0);
+  if (n <= 0) return [{ type: 'feil', tekst: 'Du har ikke noe korn å gi.', mangler: { korn: LANDSBY.leveranse } }];
+  spill.lager.korn -= n;
+  l.mat += n;
+  spill.stat.matLevert += n;
+  const hendelser = [{ type: 'mat', i, antall: n }];
+  while (l.str < LANDSBY.maksStorrelse && l.mat >= LANDSBY.vekst[l.str]) {
+    l.mat -= LANDSBY.vekst[l.str];
+    l.str++;
+    spill.stat.storsteLandsby = Math.max(spill.stat.storsteLandsby, l.str);
+    hendelser.push({ type: 'vekst', i, str: l.str, tekst: `${verden.landsbynavn.get(i)} vokser! Nå størrelse ${l.str} 🏘️` });
+  }
+  return hendelser.concat(sjekkMaal(spill));
+}
+
+/** Hva får man for å selge `antall` av en vare i landsbyen nå? (Prisen faller for hver vare.) */
+export function markedsverdi(spill, verden, i, vare, antall) {
+  const l = landsby(spill, verden, i);
+  let f = l.priser[vare];
+  if (f === undefined) return { mynter: 0, faktor: 0 };
+  let mynter = 0;
+  for (let k = 0; k < antall; k++) {
+    mynter += MARKED.pris[vare] * f;
+    f = Math.max(MARKED.minFaktor, f * MARKED.fallPerVare);
+  }
+  return { mynter: Math.round(mynter), faktor: f };
+}
+
+export function selgIMarked(spill, verden, i, vare, antall) {
+  const l = landsby(spill, verden, i);
+  if (!kobletTilLeiren(spill, verden, i)) return [{ type: 'feil', tekst: 'Bygg vei til landsbyen først, så varene kommer fram.' }];
+  if (l.priser[vare] === undefined) return [{ type: 'feil', tekst: 'Den landsbyen kjøper ikke det.' }];
+  const n = Math.min(antall, spill.lager[vare] || 0);
+  if (n <= 0) return [{ type: 'feil', tekst: 'Ingenting å selge.' }];
+  const { mynter, faktor } = markedsverdi(spill, verden, i, vare, n);
+  spill.lager[vare] -= n;
+  l.priser[vare] = faktor;
+  gi(spill, { mynter });
+  spill.stat.solgt += n;
+  return [{ type: 'solgt', i, ravare: vare, antall: n, mynter }].concat(sjekkMaal(spill));
+}
+
+export { naboer4 };
 
 // ---------------------------------------------------------------------------
 // Salg i leiren

@@ -330,11 +330,15 @@ const BYGG = {
     vogn(ctx, tilf, S * 0.74, S * 0.84, S * 0.17);
     hakke(ctx, S * 0.57, S * 0.93, S * 0.12);
   },
-  landsby(ctx, S, tilf) {
+  /** Landsbyen vokser synlig: størrelse 1 = to hus, 2 = tre hus, 3+ = kirke, 5 = flagg. */
+  landsby(ctx, S, tilf, str = 2) {
     hus(ctx, S * 0.32, S * 0.36, S * 0.26, S * 0.22, S * 0.14, S * 0.12, { vegg: FIGUR.pussVegg, tak: FIGUR.takBla });
-    hus(ctx, S * 0.72, S * 0.42, S * 0.24, S * 0.2, S * 0.13, S * 0.11, { vegg: FIGUR.treVegg, tak: FIGUR.takGronn });
-    bronn(ctx, S * 0.5, S * 0.66, S * 0.12);
+    if (str >= 2) hus(ctx, S * 0.72, S * 0.42, S * 0.24, S * 0.2, S * 0.13, S * 0.11, { vegg: FIGUR.treVegg, tak: FIGUR.takGronn });
+    if (str >= 3) kirke(ctx, S * 0.62, S * 0.66, S);
+    else bronn(ctx, S * 0.56, S * 0.66, S * 0.12);
+    if (str >= 4) hus(ctx, S * 0.82, S * 0.84, S * 0.2, S * 0.16, S * 0.11, S * 0.09, { vegg: FIGUR.treVegg, tak: FIGUR.takRod });
     hus(ctx, S * 0.34, S * 0.8, S * 0.28, S * 0.22, S * 0.15, S * 0.12, { vegg: FIGUR.pussVegg, tak: FIGUR.takRod, pipe: true });
+    if (str >= 5) flagg(ctx, S * 0.14, S * 0.6, S * 0.36);
   },
 };
 
@@ -479,6 +483,17 @@ function hakke(ctx, x, y, l) {
   ctx.beginPath(); ctx.moveTo(x - l * 0.5, y); ctx.lineTo(x + l * 0.4, y - l * 0.35); ctx.stroke();
   ctx.strokeStyle = '#a7adb8'; ctx.lineWidth = l * 0.1;
   ctx.beginPath(); ctx.moveTo(x + l * 0.15, y - l * 0.6); ctx.quadraticCurveTo(x + l * 0.45, y - l * 0.4, x + l * 0.55, y - l * 0.05); ctx.stroke();
+}
+
+/** Liten hvit kirke med tårn og spir. */
+function kirke(ctx, x, y, S) {
+  const vegg = { topp: '#f4ecd8', venstre: '#f4ecd8', hoyre: '#cfc2a3' };
+  hus(ctx, x, y, S * 0.2, S * 0.14, S * 0.12, S * 0.08, { vegg: [vegg.venstre, vegg.hoyre], tak: FIGUR.takMork, vindu: '#9fc3e0' });
+  const p = iso(x - S * 0.12, y - S * 0.02);
+  kasse(ctx, ...p(0, 0, 0), S * 0.08, S * 0.08, S * 0.24, vegg);
+  const t = iso(...p(0, 0, 0));
+  poly(ctx, [t(-S * 0.045, S * 0.045, S * 0.24), t(S * 0.045, S * 0.045, S * 0.24), t(0, 0, S * 0.36)], FIGUR.takMork[0]);
+  poly(ctx, [t(S * 0.045, -S * 0.045, S * 0.24), t(S * 0.045, S * 0.045, S * 0.24), t(0, 0, S * 0.36)], FIGUR.takMork[1]);
 }
 
 function bronn(ctx, x, y, r) {

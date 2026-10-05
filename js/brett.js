@@ -10,6 +10,7 @@ import { KLAMMER, BAKGRUNN } from './stil/palett.js';
 import { T } from './data/terreng.js';
 import { blandSeed, lagTilfeldig } from './rng.js';
 import { kanAvdekkes } from './spill.js';
+import { veiRetninger } from './veinett.js';
 
 export const RUTE = 100;                 // verdensenheter per rute
 export const FUGE = 1.5;                 // målt i forbildet: ca. 1,5 % av ruta
@@ -20,21 +21,34 @@ const TERRENGNAVN = {
   [T.SKOG]: 'skog', [T.AAS]: 'aas', [T.FJELL]: 'fjell',
 };
 
+/** Veiene på ei rute, gruppert per veitype: [{ type, retninger: 'NE' }]. */
+function veierFor(spill, verden, i) {
+  const grupper = new Map();
+  for (const [d, type] of veiRetninger(spill, verden, i)) grupper.set(type, (grupper.get(type) ?? '') + d);
+  // En vei uten naboer vises som en liten flekk (retninger '').
+  if (spill.veier.has(i) && !grupper.size) grupper.set(spill.veier.get(i), '');
+  return [...grupper].map(([type, retninger]) => ({ type, retninger }));
+}
+
 /** Hva skal kortet for rute i vise akkurat nå? null = ingenting (svart). */
 export function innholdFor(spill, verden, i) {
   if (!spill.avdekket[i]) return kanAvdekkes(spill, verden, i) ? { ukjent: true } : null;
   const terreng = TERRENGNAVN[verden.terreng[i]];
+  const vei = veierFor(spill, verden, i);
+  const medVei = vei.length ? { vei } : {};
   const b = spill.bygg.get(i);
-  if (b) return { terreng, bygg: b.type, nivaa: b.nivaa };
+  if (b) return { terreng, bygg: b.type, nivaa: b.nivaa, ...medVei };
   const o = verden.overlegg.get(i);
-  if (o?.type === 'landsby') return { terreng, bygg: 'landsby' };
+  if (o?.type === 'landsby') return { terreng, bygg: 'landsby', nivaa: spill.landsbyer.get(i)?.str ?? 1, ...medVei };
+  if (spill.veier.has(i)) return { terreng, ...medVei };
   if (o && !spill.brukt.has(i)) {
     return { terreng, overlegg: o.type === 'dyr' ? (o.art === 'hjort' ? 'hjort' : 'sau') : o.type };
   }
   return { terreng };
 }
 
-const signatur = (inn) => (inn.ukjent ? '?' : `${inn.terreng}|${inn.bygg ?? ''}|${inn.nivaa ?? ''}|${inn.overlegg ?? ''}`);
+const signatur = (inn) => (inn.ukjent ? '?'
+  : `${inn.terreng}|${inn.bygg ?? ''}|${inn.nivaa ?? ''}|${inn.overlegg ?? ''}|${(inn.vei ?? []).map((v) => v.type + v.retninger).join(',')}`);
 
 // Kort tegnes i noen faste størrelser (enhetspiksler) og skaleres litt ved tegning.
 const STORRELSER = [48, 64, 96, 128, 192, 256, 384];

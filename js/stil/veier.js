@@ -70,7 +70,8 @@ function strek(ctx, stiliste, bredde, farge, kapp = 'butt') {
 
 /** Fyller midten der flere stier møtes, så krysset blir helt. */
 function midtflekk(ctx, S, retninger, bredde, farge) {
-  if (retninger.length < 3 && retninger.length !== 1) return;
+  if (retninger.length === 2) return; // rett strekning eller sving trenger ingen flekk
+
   ctx.fillStyle = farge;
   ctx.beginPath();
   ctx.arc(S / 2, S / 2, bredde / 2, 0, Math.PI * 2);

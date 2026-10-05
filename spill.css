@@ -257,3 +257,16 @@ main { position: relative; flex: 1; min-height: 0; }
 
 .byggvalg.dempet { background: #f3efe6; }
 .byggvalg.dempet .stort-ikon, .byggvalg.dempet .navn { opacity: 0.6; }
+
+/* Fase 2: seksjoner, stolper og veimodus */
+.rutepanel h3.seksjon { margin: 14px 0 4px; font-size: 15px; }
+.rutepanel .stolpe { height: 8px; border-radius: 4px; background: var(--panel-mork); overflow: hidden; margin: 4px 0 2px; }
+.rutepanel .stolpe i { display: block; height: 100%; background: var(--gronn); border-radius: 4px; transition: width 0.3s; }
+#veimodus.aktiv { background: var(--aksent); border-color: var(--aksent-mork); box-shadow: 0 0 0 4px rgba(224, 160, 48, 0.35); }
+.veimodus-hint {
+  position: absolute; left: 50%; top: 96px; transform: translateX(-50%); z-index: 3;
+  padding: 8px 14px; border-radius: 999px; background: rgba(246, 241, 228, 0.96);
+  border: 2px solid var(--aksent); font-size: 14px; font-weight: 600; text-align: center;
+  width: max-content; max-width: 92%;
+}
+.venstreknapper { display: flex; gap: 8px; }

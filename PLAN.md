@@ -158,7 +158,7 @@ All tallbalanse samles i én fil (`data/balanse.js`) så det er lett å justere.
 |---|---|---|
 | 0 ✅ | Kartgenerator + visning (debugknapp: «ny seed») | Kartene ser naturlige og varierte ut |
 | 1 ✅ | Kjerne: tåke, avdekke, 3 råvarer (tre, stein, korn), 3 bygg, mynter, lagring | 10 min spill uten feil og med lyst på mer |
-| 2 | Landsbyer, veier (tre → stein), handelsruter, marked | Veibygging føles lønnsomt |
+| 2 ✅ | Landsbyer, veier (tre → stein), handelsruter, marked | Veibygging føles lønnsomt |
 | 3 | Alle råvarer, dyr, fisk, jern, nabobonuser, oppdrag | Variert midtspill |
 | 4 | Havn, skip, ny verden, havkart, seiling fram og tilbake, lager i gamle verdener, kartstjerner, nye biomer | Det er morsomt å seile tilbake og hente last |
 | 5 | Hendelser, lyd, juice, PWA-polish, iPad-test, balansering | Klar for familien |
@@ -228,3 +228,12 @@ mørkere kanter, svart bakgrunn `#010101`, klammer `#faf2db`). All grafikk er te
 - `js/brett.js`: hva hver rute viser (`innholdFor`), kort-hurtiglager per zoomtrinn (48–384 px), røyk rundt kanten, avdekkingsanimasjon, nivåmerker, klammer.
 - `proveark.html`: prøveark med alle ruter, bygg, veier og jernbane (fase 2-forberedelse).
 - Kartverkstedet (`verksted.html`) bruker fortsatt Kenney-grafikken – det er bare et utviklerverktøy.
+
+## Status fase 2 (2026-10-05)
+- `js/veinett.js`: hvor vei kan ligge, nett av veier **og egne bygg** (varer fraktes gjennom bygg – ellers blir en leir omringet av gårder stengt inne), handelsruter, korteste nye vei til leiren (Dijkstra).
+- Veier: trevei (2 🪵), bru over vann (6 🪵), oppgradering til steinvei (2 🪨 / bru 5 🪨). Ikke på fjell. Dyr flytter seg når veien kommer (lagres i `spill.flytt`).
+- Handelsrute per par av steder (leiren = størrelse 1): (str A + str B) × (1 + steinandel) + ⌊lengde/5⌋ mynter per dag.
+- Landsbyer: vokser med mat (20/40/80/160 korn → størrelse 2–5, synlig med flere hus, kirke og flagg), marked som kjøper to varer til dobbel leirpris, prisen faller per vare og henter seg inn over natta. Krever vei til leiren.
+- Grensesnitt: «Bygg vei hit fra leiren» i landsbypanelet, veimodus-knapp (🛤️, tast V), veipanel med «gjør hele veien om til stein».
+- Lagring versjon 2 med migrering fra 1. 10 nye mål.
+- Robot (test/simuler.js): handel gir ~25 🪙/dag ved dag 21 og ~110 ved dag 50; økonomien fortsetter å vokse etter dag 20.

@@ -1,7 +1,7 @@
 // Alt som er HTML rundt kartet: råvarelinja, mål, rutepanelet, meldinger og menyen.
 // Får data inn og kaller tilbake til main.js ved trykk – inneholder ingen spillregler.
 
-import { RAVARER, RAVARE_REKKEFOLGE, BYGG, PRIS, MAKS_NIVAA } from './data/balanse.js';
+import { RAVARER, RAVARE_REKKEFOLGE, BYGG, PRIS, MAKS_NIVAA, VEI, LANDSBY, MARKED } from './data/balanse.js';
 import { TERRENG, T } from './data/terreng.js';
 import * as S from './spill.js';
 
@@ -109,8 +109,102 @@ const TERRENG_TEKST = {
   [T.FJELL]: 'Fjell – mye stein.',
 };
 
+/** Knapp-HTML for et valg i panelet. */
+function valgKnapp({ ikon, navn, gir = '', kost = null, lager, forklaring = '', data }) {
+  const dempet = kost && !Object.entries(kost).every(([r, n]) => (lager[r] || 0) >= n);
+  return `<button class="byggvalg${dempet ? ' dempet' : ''}" ${data}>
+    <span class="stort-ikon">${ikon}</span><span class="navn">${navn}</span>
+    <span class="gir">${gir}</span>
+    <span class="forklaring">${kost ? kostHtml(kost, lager) : ''} ${esc(forklaring)}</span></button>`;
+}
+
+/** Handelsrutene som går til/fra rute i, som korte linjer. */
+function handelHtml(spill, verden, i) {
+  const ruter = S.handelsruter(spill, verden).filter((r) => r.a === i || r.b === i);
+  if (!ruter.length) return '';
+  const sum = ruter.reduce((a, r) => a + r.mynter, 0);
+  return `<p class="produksjon">+${sum} 🪙 per dag fra handel</p><p class="liten">${ruter.map((r) =>
+    `↔ ${esc(S.stedNavn(spill, verden, r.a === i ? r.b : r.a))}: +${r.mynter} 🪙 (${r.lengde} ruter vei${r.stein ? `, ${r.stein} stein` : ''})`).join('<br>')}</p>`;
+}
+
+function landsbyHtml(spill, verden, i) {
+  const l = S.landsby(spill, verden, i);
+  const koblet = S.kobletTilLeiren(spill, verden, i);
+  let html = `<h2>🏘️ ${esc(verden.landsbynavn.get(i))} <span class="liten">størrelse ${l.str} ${'★'.repeat(l.str)}</span></h2>`;
+  if (!koblet) {
+    html += '<p class="info-linje">Landsbyen er ikke koblet til leiren ennå. Med vei kan dere handle, og du kan gi dem mat så de vokser.</p>';
+    const plan = S.veiTilLeirenPlan(spill, verden, i);
+    if (plan && plan.ruter.length) {
+      html += `<div class="valg">${valgKnapp({
+        ikon: '🛤️', navn: 'Bygg vei hit fra leiren', gir: `${plan.ruter.length} ruter`, kost: plan.kost, lager: spill.lager,
+        forklaring: plan.broer ? `med ${plan.broer} bru` : 'billigste vei over det du har utforsket', data: 'data-vei-hit',
+      })}</div>`;
+    } else {
+      html += '<p class="liten">Fant ingen vei hit ennå – avdekk mer av kartet mellom landsbyen og leiren.</p>';
+    }
+    return html;
+  }
+  html += handelHtml(spill, verden, i) || '<p class="liten">Koblet til leiren med vei.</p>';
+  // Mat og vekst
+  if (l.str < LANDSBY.maksStorrelse) {
+    const trenger = LANDSBY.vekst[l.str];
+    html += `<h3 class="seksjon">🌾 Mat til landsbyen</h3>
+      <div class="stolpe"><i style="width:${Math.round((l.mat / trenger) * 100)}%"></i></div>
+      <p class="liten">${l.mat} / ${trenger} korn til størrelse ${l.str + 1}. Større landsby gir mer handel.</p>
+      <div class="valg">${valgKnapp({
+        ikon: '🧺', navn: `Gi ${LANDSBY.leveranse} korn`, kost: { korn: Math.min(LANDSBY.leveranse, Math.max(1, spill.lager.korn || 0)) },
+        lager: spill.lager, data: 'data-mat',
+      })}</div>`;
+  } else {
+    html += '<p class="liten">⭐ Landsbyen er så stor den kan bli!</p>';
+  }
+  // Marked
+  html += '<h3 class="seksjon">🛒 Marked – betaler bedre enn leiren</h3><div class="marked">';
+  for (const vare of Object.keys(l.priser)) {
+    const har = spill.lager[vare] || 0;
+    const enhet = MARKED.pris[vare] * l.priser[vare];
+    const ti = S.markedsverdi(spill, verden, i, vare, Math.min(10, har)).mynter;
+    const alt = S.markedsverdi(spill, verden, i, vare, har).mynter;
+    html += `<div class="rad"><span>${RAVARER[vare].ikon} ${RAVARER[vare].navn}: <b>${har}</b> <span class="liten">(${enhet.toFixed(1).replace('.', ',')} 🪙 per stk)</span></span>
+      <button data-marked="${vare}" data-antall="10" ${har < 1 ? 'disabled' : ''}>Selg ${Math.min(10, har) || 10}${har ? ` (+${ti})` : ''}</button>
+      <button data-marked="${vare}" data-antall="${har}" ${har < 1 ? 'disabled' : ''}>Alt${har ? ` (+${alt})` : ''}</button></div>`;
+  }
+  html += '</div><p class="liten">Prisen synker litt for hver vare du selger, og henter seg inn igjen over natta.</p>';
+  return html;
+}
+
+function veiHtml(spill, verden, i) {
+  const type = spill.veier.get(i);
+  const bru = verden.terreng[i] === T.VANN;
+  const def = VEI[type];
+  let html = `<h2>${def.ikon} ${def.navn}${bru ? ' (bru)' : ''}</h2>`;
+  const steder = S.stederINettet(spill, verden, i);
+  html += steder.length
+    ? `<p class="info-linje">Veien binder sammen: ${steder.map((j) => esc(S.stedNavn(spill, verden, j))).join(', ')}.</p>`
+    : '<p class="info-linje">Veien er ikke koblet til noe sted ennå. Bygg videre mot leiren eller en landsby!</p>';
+  if (type === 'tre') {
+    const nett = S.treveierINettet(spill, verden, i);
+    html += '<div class="valg">';
+    html += valgKnapp({
+      ikon: '🧱', navn: 'Gjør om til steinvei', gir: 'mer handel', kost: S.steinKostFor(verden, [i]), lager: spill.lager,
+      forklaring: 'Steinvei gir opptil dobbelt så mye handel.', data: `data-steinvei="en"`,
+    });
+    if (nett.length > 1) {
+      html += valgKnapp({
+        ikon: '🧱', navn: `Gjør hele veien om til stein`, gir: `${nett.length} ruter`, kost: S.steinKostFor(verden, nett), lager: spill.lager,
+        data: `data-steinvei="alle"`,
+      });
+    }
+    html += '</div>';
+  } else {
+    html += '<p class="liten">⭐ Steinvei – den beste veien.</p>';
+  }
+  return html;
+}
+
 /**
- * Viser panelet for rute i. `h` = handlinger: { bygg(type), oppgrader(), selg(ravare, antall) }.
+ * Viser panelet for rute i. `h` = handlinger:
+ * { bygg(type), oppgrader(), selg(ravare, antall), byggVei(), steinvei(ruter), veiHit(), mat(), marked(vare, antall) }.
  */
 export function visRutepanel(spill, verden, i, h) {
   const panel = $('rutepanel');
@@ -128,52 +222,61 @@ export function visRutepanel(spill, verden, i, h) {
     if (prod.forklaring) html += `<p class="liten">${esc(prod.forklaring)}</p>`;
     html += `<p class="info-linje">${esc(def.tekst)}</p>`;
     if (b.type === 'leir') {
-      html += '<h3 style="margin:12px 0 0;font-size:15px">🛒 Selg varer</h3><div class="marked">';
+      html += handelHtml(spill, verden, i);
+      html += '<h3 class="seksjon">🛒 Selg varer</h3><div class="marked">';
       for (const [r, pris] of Object.entries(PRIS)) {
         const har = spill.lager[r] || 0;
         html += `<div class="rad"><span>${RAVARER[r].ikon} ${RAVARER[r].navn}: <b>${har}</b> <span class="liten">(${pris} 🪙 per stk)</span></span>
           <button data-selg="${r}" data-antall="10" ${har < 1 ? 'disabled' : ''}>Selg ${Math.min(10, har) || 10}</button>
           <button data-selg="${r}" data-antall="${har}" ${har < 1 ? 'disabled' : ''}>Selg alt${har ? ` (+${har * pris} 🪙)` : ''}</button></div>`;
       }
-      html += '</div>';
+      html += '</div><p class="liten">Tips: landsbyer som er koblet til leiren med vei, betaler bedre.</p>';
     } else if (b.nivaa < MAKS_NIVAA) {
       const kost = S.oppgraderKost(spill, i);
       const neste = S.produksjon(spill, verden, i, b.type, b.nivaa + 1);
-      html += `<div class="valg"><button class="byggvalg${S.harRad(spill, kost) ? '' : ' dempet'}" data-oppgrader>
-        <span class="stort-ikon">⬆️</span><span class="navn">Oppgrader til nivå ${b.nivaa + 1}</span>
-        <span class="gir">${gaveTekst(neste.gave)}/dag</span>
-        <span class="forklaring">${kostHtml(kost, spill.lager)}</span></button></div>`;
+      html += `<div class="valg">${valgKnapp({
+        ikon: '⬆️', navn: `Oppgrader til nivå ${b.nivaa + 1}`, gir: `${gaveTekst(neste.gave)}/dag`, kost, lager: spill.lager, data: 'data-oppgrader',
+      })}</div>`;
     } else {
       html += '<p class="liten">⭐ Høyeste nivå!</p>';
     }
   } else if (o?.type === 'landsby') {
-    html += `<h2>🏘️ ${esc(verden.landsbynavn.get(i))}</h2>
-      <p class="info-linje">En liten landsby. Folk her vil gjerne handle!</p>
-      <p class="liten">Snart kan du bygge vei hit og tjene mynter på handel (kommer i neste versjon).</p>`;
+    html += landsbyHtml(spill, verden, i);
+  } else if (spill.veier.has(i)) {
+    html += veiHtml(spill, verden, i);
   } else {
     html += `<h2>${terreng.ikon} ${terreng.navn}</h2><p class="info-linje">${TERRENG_TEKST[verden.terreng[i]]}</p>`;
     if (o?.type === 'dyr') html += `<p class="info-linje">${o.art === 'hjort' ? '🦌 En hjort' : '🐑 En villsau'} bor her. Jakthytte kommer senere.</p>`;
     if (o?.type === 'malm') html += '<p class="info-linje">⛓️ Jernmalm! En gruve kan bygges her senere.</p>';
-    const mulige = S.muligeBygg(spill, verden, i);
-    if (mulige.length) {
-      html += '<div class="valg">';
-      for (const type of mulige) {
-        const def = BYGG[type];
-        const kost = S.byggKost(spill, type);
-        const prod = S.produksjon(spill, verden, i, type, 1);
-        html += `<button class="byggvalg${S.harRad(spill, kost) ? '' : ' dempet'}" data-bygg="${type}">
-          <span class="stort-ikon">${def.ikon}</span><span class="navn">Bygg ${def.navn.toLowerCase()}</span>
-          <span class="gir">${gaveTekst(prod.gave)}/dag</span>
-          <span class="forklaring">${kostHtml(kost, spill.lager)} ${esc(prod.forklaring)}</span></button>`;
-      }
-      html += '</div>';
+    const valg = [];
+    for (const type of S.muligeBygg(spill, verden, i)) {
+      const def = BYGG[type];
+      const prod = S.produksjon(spill, verden, i, type, 1);
+      valg.push(valgKnapp({
+        ikon: def.ikon, navn: `Bygg ${def.navn.toLowerCase()}`, gir: `${gaveTekst(prod.gave)}/dag`,
+        kost: S.byggKost(spill, type), lager: spill.lager, forklaring: prod.forklaring, data: `data-bygg="${type}"`,
+      }));
     }
+    if (S.kanHaVei(spill, verden, i)) {
+      const bru = verden.terreng[i] === T.VANN;
+      valg.push(valgKnapp({
+        ikon: '🛤️', navn: bru ? 'Bygg bru' : 'Bygg trevei', kost: S.veiKost(verden, i), lager: spill.lager,
+        forklaring: o?.type === 'dyr' ? 'Dyret flytter seg litt unna.' : 'Veier mellom leiren og landsbyer gir handel.', data: 'data-vei',
+      }));
+    }
+    if (valg.length) html += `<div class="valg">${valg.join('')}</div>`;
   }
 
   innhold.innerHTML = html;
-  innhold.querySelectorAll('[data-bygg]').forEach((k) => { k.onclick = () => h.bygg(k.dataset.bygg); });
-  innhold.querySelectorAll('[data-oppgrader]').forEach((k) => { k.onclick = () => h.oppgrader(); });
-  innhold.querySelectorAll('[data-selg]').forEach((k) => { k.onclick = () => h.selg(k.dataset.selg, Number(k.dataset.antall)); });
+  const koble = (sel, fn) => innhold.querySelectorAll(sel).forEach((k) => { k.onclick = () => fn(k); });
+  koble('[data-bygg]', (k) => h.bygg(k.dataset.bygg));
+  koble('[data-oppgrader]', () => h.oppgrader());
+  koble('[data-selg]', (k) => h.selg(k.dataset.selg, Number(k.dataset.antall)));
+  koble('[data-vei]', () => h.byggVei());
+  koble('[data-steinvei]', (k) => h.steinvei(k.dataset.steinvei === 'alle'));
+  koble('[data-vei-hit]', () => h.veiHit());
+  koble('[data-mat]', () => h.mat());
+  koble('[data-marked]', (k) => h.marked(k.dataset.marked, Number(k.dataset.antall)));
   panel.hidden = false;
 }
 

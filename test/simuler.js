@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 import {
   nyttSpill, avdekk, kanAvdekkes, avdekkKost, bygg, muligeBygg, byggKost, oppgrader, oppgraderKost,
   produksjon, inntektPerDag, nyDag, selg, harRad, aktiveMaal,
+  byggVei, kanHaVei, handelsruter, kobletTilLeiren, veiTilLeirenPlan, byggVeiTilLeiren,
+  treveierINettet, oppgraderVei, steinKostFor, giMat, selgIMarked, landsby, markedsverdi,
 } from '../js/spill.js';
 import { tilData, fraData } from '../js/lagring.js';
 import { BYGG } from '../js/data/balanse.js';
@@ -50,6 +52,67 @@ const DAGER = Number(process.argv[3] ?? 60);
 }
 
 // ---------------------------------------------------------------------------
+// 1b. Veier og handel
+// ---------------------------------------------------------------------------
+{
+  const { spill, verden } = nyttSpill(seed, 32);
+  const B = verden.bredde;
+  // Avdekk alt, så vi kan teste veier fritt.
+  spill.avdekket.fill(1);
+  spill.lager = { mynter: 999, tre: 999, stein: 999, korn: 999 };
+  const leir = verden.start.y * B + verden.start.x;
+  const landsbyer = [...verden.landsbynavn.keys()].sort((a, b) =>
+    Math.hypot((a % B) - verden.start.x, Math.floor(a / B) - verden.start.y) - Math.hypot((b % B) - verden.start.x, Math.floor(b / B) - verden.start.y));
+  const naer = landsbyer[0];
+  assert.equal(kobletTilLeiren(spill, verden, naer), false, 'ingen vei ennå');
+  assert.equal(handelsruter(spill, verden).length, 0);
+  const plan = veiTilLeirenPlan(spill, verden, naer);
+  assert.ok(plan && plan.ruter.length > 0, 'fant vei til nærmeste landsby');
+  assert.ok(plan.ruter.every((r) => kanHaVei(spill, verden, r)), 'planen går bare over lovlige ruter');
+  const h = byggVeiTilLeiren(spill, verden, naer);
+  assert.ok(h.some((e) => e.type === 'nyRute'), 'ny handelsrute meldes');
+  assert.equal(kobletTilLeiren(spill, verden, naer), true);
+  const ruter = handelsruter(spill, verden);
+  assert.equal(ruter.length, 1);
+  const forStein = ruter[0].mynter;
+  // Ingen bygg på vei, ingen vei på bygg.
+  assert.equal(muligeBygg(spill, verden, plan.ruter[0]).length, 0);
+  assert.equal(kanHaVei(spill, verden, leir), false);
+  // Steinvei gir mer handel.
+  const tre = treveierINettet(spill, verden, plan.ruter[0]);
+  const kost = steinKostFor(verden, tre);
+  oppgraderVei(spill, verden, tre);
+  assert.ok(handelsruter(spill, verden)[0].mynter > forStein, 'steinvei øker handelen');
+  assert.ok(Object.values(kost).every((n) => n > 0));
+  // Landsbyen vokser av mat, og markedet gir lavere pris for hver vare.
+  const l = landsby(spill, verden, naer);
+  giMat(spill, verden, naer);
+  assert.equal(l.str, 1, 'ikke nok mat ennå');
+  giMat(spill, verden, naer);
+  assert.equal(l.str, 2, 'vokser etter 20 korn');
+  const vare = Object.keys(l.priser)[0];
+  const ti = markedsverdi(spill, verden, naer, vare, 10).mynter;
+  selgIMarked(spill, verden, naer, vare, 10);
+  assert.ok(markedsverdi(spill, verden, naer, vare, 10).mynter < ti, 'prisen faller etter salg');
+  nyDag(spill, verden);
+  assert.ok(l.priser[vare] > 0.74 && l.priser[vare] < 1, 'prisen henter seg inn over natta');
+  // Lagring tar med veier og landsbyer.
+  const kopi = fraData(JSON.parse(JSON.stringify(tilData(spill))));
+  assert.deepEqual([...kopi.veier], [...spill.veier]);
+  assert.deepEqual([...kopi.landsbyer], [...spill.landsbyer]);
+  // Gammel lagring (versjon 1) lastes uten tap.
+  const gammel = { ...tilData(spill), versjon: 1 };
+  delete gammel.veier; delete gammel.landsbyer;
+  const migrert = fraData(gammel);
+  assert.equal(migrert.veier.size, 0);
+  assert.equal(migrert.stat.handel, spill.stat.handel);
+  // Vei kan ikke bygges i tåka eller på fjell.
+  const fersk = nyttSpill(seed, 32);
+  assert.equal(byggVei(fersk.spill, fersk.verden, 0)[0].type, 'feil');
+  console.log(`✓ vei- og handelstester ok (rute ${forStein} → ${handelsruter(spill, verden)[0].mynter} 🪙/dag med stein)`);
+}
+
+// ---------------------------------------------------------------------------
 // 2. Robot-simulering
 // ---------------------------------------------------------------------------
 const { spill, verden } = nyttSpill(seed, 32);
@@ -58,6 +121,24 @@ const fmt = (o) => Object.entries(o).filter(([, n]) => n).map(([r, n]) => `${r} 
 const maalLogg = [];
 
 function robotDag() {
+  // a2) Koble funne landsbyer til leiren, gi dem mat og selg i markedet.
+  for (const i of verden.landsbynavn.keys()) {
+    if (!spill.avdekket[i]) continue;
+    if (!kobletTilLeiren(spill, verden, i)) {
+      const plan = veiTilLeirenPlan(spill, verden, i);
+      if (plan && plan.ruter.length && harRad(spill, plan.kost)) loggHendelser(byggVeiTilLeiren(spill, verden, i));
+      continue;
+    }
+    if (spill.lager.korn >= 20) loggHendelser(giMat(spill, verden, i));
+    for (const vare of Object.keys(landsby(spill, verden, i).priser)) {
+      if (spill.lager[vare] > 20) loggHendelser(selgIMarked(spill, verden, i, vare, spill.lager[vare] - 20));
+    }
+  }
+  const tre = [...spill.veier].filter(([, t]) => t === 'tre').map(([r]) => r);
+  if (tre.length && spill.lager.stein >= 30) {
+    const nett = treveierINettet(spill, verden, tre[0]);
+    if (harRad(spill, steinKostFor(verden, nett))) loggHendelser(oppgraderVei(spill, verden, nett));
+  }
   // a) Selg overskudd over 15 av tre/korn, over 20 stein.
   for (const [r, behold] of [['tre', 15], ['korn', 15], ['stein', 20]]) {
     if (spill.lager[r] > behold) loggHendelser(selg(spill, r, spill.lager[r] - behold));
@@ -101,11 +182,13 @@ function robotDag() {
 }
 
 function loggHendelser(h) {
-  for (const e of h) if (e.type === 'maal' || e.type === 'funn') maalLogg.push(`dag ${spill.dag}: ${e.type === 'maal' ? '🎯 ' : ''}${e.tekst}`);
+  for (const e of h) {
+    if (['maal', 'funn', 'nyRute', 'vekst'].includes(e.type)) maalLogg.push(`dag ${spill.dag}: ${e.type === 'maal' ? '🎯 ' : ''}${e.tekst}`);
+  }
 }
 
 console.log(`\nSeed ${seed}, ${DAGER} dager. Start: ${fmt(spill.lager)}`);
-console.log('dag | lager                                  | inntekt/dag                 | avdekket | bygg | neste avdekk');
+console.log('dag | lager                                  | inntekt/dag                 | avdekket | bygg | neste avdekk | veier | handel/dag');
 for (let d = 1; d <= DAGER; d++) {
   robotDag();
   if (d <= 10 || d % 5 === 0) {
@@ -113,8 +196,9 @@ for (let d = 1; d <= DAGER; d++) {
     const neste = Math.min(...[...Array(N).keys()].filter((i) => kanAvdekkes(spill, verden, i)).map((i) => avdekkKost(spill, verden, i).mynter));
     console.log(
       `${String(spill.dag).padStart(3)} | ${fmt(spill.lager).padEnd(38)} | ${fmt(inntektPerDag(spill, verden)).padEnd(27)} | ` +
-      `${String(spill.stat.avdekket).padStart(8)} | ${Object.entries(ant).map(([t, n]) => `${BYGG[t].ikon}${n}`).join(' ').padEnd(4)} | ${neste}`);
+      `${String(spill.stat.avdekket).padStart(8)} | ${Object.entries(ant).map(([t, n]) => `${BYGG[t].ikon}${n}`).join(' ').padEnd(4)} | ${neste} | ${spill.veier.size} | ${handelsruter(spill, verden).reduce((a, r) => a + r.mynter, 0)}`);
   }
 }
 console.log('\nHendelser:\n' + maalLogg.join('\n'));
 console.log('\nAktive mål ved slutt:', aktiveMaal(spill).map((m) => `${m.tekst} (${m.naa}/${m.maal})`).join(' · '));
+

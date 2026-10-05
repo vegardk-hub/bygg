@@ -27,13 +27,18 @@
 
     <div id="meldinger" aria-live="polite"></div>
 
+    <div id="veimodus-hint" class="veimodus-hint" hidden>🛤️ Veimodus: trykk på ruter for å legge trevei (2 🪵, bru 6 🪵). Trykk 🛤️ igjen for å avslutte.</div>
+
     <section id="rutepanel" class="kort rutepanel" hidden>
       <button id="lukk-panel" class="lukk" aria-label="Lukk">✕</button>
       <div id="rutepanel-innhold"></div>
     </section>
 
     <div class="bunnknapper">
-      <button id="hjem" class="rund" aria-label="Til leiren" title="Til leiren">🏠</button>
+      <div class="venstreknapper">
+        <button id="hjem" class="rund" aria-label="Til leiren" title="Til leiren">🏠</button>
+        <button id="veimodus" class="rund" aria-label="Bygg vei" title="Veimodus: trykk på ruter for å legge vei (V)">🛤️</button>
+      </div>
       <div id="avdekk-pris" class="merke" title="Trykk på en ?-rute i tåka for å avdekke den"></div>
       <button id="ny-dag" class="ny-dag">☀️<span>Ny dag</span></button>
     </div>

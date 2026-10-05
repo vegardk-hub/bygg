@@ -2,13 +2,14 @@
 // aldri går tapt når spillet oppdateres. Kartet lagres ikke – bare seed og det
 // spilleren har gjort – så lagringen er liten.
 
-import { SPILL_VERSJON } from './spill.js';
+import { SPILL_VERSJON, TOM_STAT } from './spill.js';
 
 const NOKKEL = 'bygg-lagring';
 
 /** Migreringer: MIGRERINGER[n] gjør en versjon-n-lagring om til versjon n+1. */
 const MIGRERINGER = {
-  // 1: (data) => { ...; data.versjon = 2; return data; },
+  // Versjon 2 (fase 2): veier og landsbyer.
+  1: (d) => ({ ...d, versjon: 2, veier: [], landsbyer: [], flytt: [] }),
 };
 
 export function tilData(spill) {
@@ -23,6 +24,9 @@ export function tilData(spill) {
     brukt: [...spill.brukt],
     maalFerdig: [...spill.maalFerdig],
     stat: { ...spill.stat },
+    veier: [...spill.veier],
+    flytt: spill.flytt.map((f) => [...f]),
+    landsbyer: [...spill.landsbyer].map(([i, l]) => [i, { ...l, priser: { ...l.priser } }]),
     lagret: Date.now(),
   };
 }
@@ -45,7 +49,10 @@ export function fraData(data) {
     bygg: new Map(d.bygg.map(([i, type, nivaa]) => [i, { type, nivaa }])),
     brukt: new Set(d.brukt),
     maalFerdig: new Set(d.maalFerdig),
-    stat: d.stat,
+    stat: { ...TOM_STAT, ...d.stat },
+    veier: new Map(d.veier),
+    flytt: d.flytt ?? [],
+    landsbyer: new Map(d.landsbyer),
   };
 }
 

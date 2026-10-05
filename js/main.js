@@ -18,11 +18,13 @@ const t = window.bygg = {
   verden: null,
   brett: null,       // kort-lager og tegning av brettet
   valgt: null,       // valgt rute (indeks) eller null
+  veimodus: false,   // når på: trykk på en rute bygger trevei
   avdekkAnim: new Map(), // rute → tidspunkt den ble avdekket (for myk tåke-overgang)
   behandle: (h) => behandle(h), // for feilsøking i konsollen: bygg.behandle(S.nyDag(bygg.spill, bygg.verden))
 };
 
 const kamera = new Kamera(lerret, { vedTrykk: trykkPaa, vedEndring: tegn });
+t.kamera = kamera; // for feilsøking i konsollen
 kamera.minSkala = 0.15;
 kamera.maksSkala = 5;
 
@@ -74,6 +76,13 @@ function trykkPaa(kx, ky) {
   const x = Math.floor(kx / RUTE), y = Math.floor(ky / RUTE);
   if (x < 0 || y < 0 || x >= verden.bredde || y >= verden.hoyde) return velg(null);
   const i = y * verden.bredde + x;
+  if (t.veimodus) {
+    // Veimodus: trykk på ruter du ser for å legge trevei. Tåka er «av» så man ikke avdekker ved et uhell.
+    if (spill.avdekket[i] && S.kanHaVei(spill, verden, i)) behandle(S.byggVei(spill, verden, i));
+    else if (spill.avdekket[i]) velg(t.valgt === i ? null : i);
+    else P.melding('Veimodus er på – trykk 🛤️ for å avslutte før du utforsker videre.');
+    return;
+  }
   if (!spill.avdekket[i]) {
     if (S.kanAvdekkes(spill, verden, i)) {
       velg(null);
@@ -105,15 +114,28 @@ function holdSynlig(i) {
 
 function visPanel() {
   if (t.valgt === null) return;
-  P.visRutepanel(t.spill, t.verden, t.valgt, {
-    bygg: (type) => behandle(S.bygg(t.spill, t.verden, t.valgt, type)),
-    oppgrader: () => behandle(S.oppgrader(t.spill, t.verden, t.valgt)),
-    selg: (r, n) => behandle(S.selg(t.spill, r, n)),
+  const { spill, verden } = t;
+  P.visRutepanel(spill, verden, t.valgt, {
+    bygg: (type) => behandle(S.bygg(spill, verden, t.valgt, type)),
+    oppgrader: () => behandle(S.oppgrader(spill, verden, t.valgt)),
+    selg: (r, n) => behandle(S.selg(spill, r, n)),
+    byggVei: () => behandle(S.byggVei(spill, verden, t.valgt)),
+    steinvei: (alle) => behandle(S.oppgraderVei(spill, verden, alle ? S.treveierINettet(spill, verden, t.valgt) : [t.valgt])),
+    veiHit: () => behandle(S.byggVeiTilLeiren(spill, verden, t.valgt)),
+    mat: () => behandle(S.giMat(spill, verden, t.valgt)),
+    marked: (vare, n) => behandle(S.selgIMarked(spill, verden, t.valgt, vare, n)),
   });
 }
 
 function nyDag() {
   behandle(S.nyDag(t.spill, t.verden));
+}
+
+function settVeimodus(paa) {
+  t.veimodus = paa;
+  $('veimodus').classList.toggle('aktiv', paa);
+  $('veimodus-hint').hidden = !paa;
+  if (paa) velg(null);
 }
 
 /** Viser alle følgene av en handling: lyd, effekter, meldinger – og lagrer. */
@@ -158,10 +180,50 @@ function behandle(hendelser) {
         break;
       }
       case 'solgt': {
-        const leir = [...t.spill.bygg].find(([, b]) => b.type === 'leir')[0];
-        const { kx, ky } = midt(leir);
+        const sted = h.i ?? [...t.spill.bygg].find(([, b]) => b.type === 'leir')[0];
+        const { kx, ky } = midt(sted);
         flytendeTekst(kx, ky, `+${h.mynter} 🪙`, { farge: '#ffe27a' });
         lyd('mynt');
+        break;
+      }
+      case 'vei':
+        for (const r of h.ruter.slice(0, 12)) {
+          const { kx, ky } = midt(r);
+          sprut(kx, ky + RUTE * 0.3, { antall: 8 });
+        }
+        lyd('bygg');
+        break;
+      case 'steinvei':
+        for (const r of h.ruter.slice(0, 12)) {
+          const { kx, ky } = midt(r);
+          sprut(kx, ky + RUTE * 0.3, { farger: ['#b8b2a6', '#d6d1c6', '#8d877c'], antall: 8 });
+        }
+        lyd('oppgrader');
+        break;
+      case 'dyrFlytter':
+        P.melding(h.tekst);
+        break;
+      case 'nyRute': {
+        const { kx, ky } = midt(h.b);
+        flytendeTekst(kx, ky, `+${h.mynter} 🪙/dag`, { farge: '#ffe27a', forsinkelse: 200 });
+        setTimeout(() => { P.melding(`🤝 ${h.tekst}`, 'maal'); lyd('funn'); }, 150);
+        break;
+      }
+      case 'handel': {
+        const { kx, ky } = midt(h.b);
+        flytendeTekst(kx, ky, `+${h.mynter} 🪙`, { farge: '#ffe27a', forsinkelse: 80 * produsert++ });
+        break;
+      }
+      case 'mat': {
+        const { kx, ky } = midt(h.i);
+        flytendeTekst(kx, ky, `🧺 ${h.antall} 🌾`, { farge: '#fff3b0' });
+        lyd('bygg');
+        break;
+      }
+      case 'vekst': {
+        const { kx, ky } = midt(h.i);
+        sprut(kx, ky, { farger: ['#ffd23f', '#e57a9a', '#9fc3e0', '#ffffff'], antall: 24, fart: 1.3 });
+        setTimeout(() => { P.melding(h.tekst, 'maal'); lyd('maal'); }, 200);
         break;
       }
       case 'nyDag':
@@ -266,6 +328,7 @@ function tegnLandsbynavn(tilSkjerm) {
 function koblKnapper() {
   $('ny-dag').onclick = nyDag;
   $('hjem').onclick = tilLeiren;
+  $('veimodus').onclick = () => settVeimodus(!t.veimodus);
   $('lukk-panel').onclick = () => velg(null);
   $('meny-knapp').onclick = aapneMeny;
   // Mål-kortet kan klappes sammen; på smale skjermer starter det sammenklappet.
@@ -292,7 +355,8 @@ function koblKnapper() {
   window.addEventListener('keydown', (e) => {
     if ($('meny').open || e.target.tagName === 'TEXTAREA') return;
     if (e.code === 'Space') { e.preventDefault(); nyDag(); }
-    if (e.code === 'Escape') velg(null);
+    if (e.code === 'Escape') { velg(null); settVeimodus(false); }
+    if (e.code === 'KeyV') settVeimodus(!t.veimodus);
   });
 }
 

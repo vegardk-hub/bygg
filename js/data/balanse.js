@@ -59,11 +59,49 @@ export const NIVAA = {
 export const OPPGRADER_KOSTVEKST = 1.15;
 export const MAKS_NIVAA = 3;
 
-/** Salgspriser i leiren (mynter per enhet). Landsbyene gir bedre priser i fase 2. */
+/** Salgspriser i leiren (mynter per enhet). Landsbyene betaler bedre (se MARKED). */
 export const PRIS = { tre: 1, korn: 1, stein: 2 };
 
 /** Funn ved avdekking. */
 export const FUNN = {
   skatt: { grunn: 15, perTidligere: 5 }, // mynter
   baer: { korn: 4 },
+};
+
+// ---------------------------------------------------------------------------
+// Fase 2: veier, handel og landsbyer
+// ---------------------------------------------------------------------------
+
+/**
+ * Veier. Nye veier er alltid trevei; en trevei kan gjøres om til steinvei.
+ * Over vann blir veien en bru (dyrere). Fjell kan ikke ha vei (tunneler kommer senere).
+ */
+export const VEI = {
+  tre: { navn: 'Trevei', ikon: '🛤️', kost: { tre: 2 }, bruKost: { tre: 6 } },
+  stein: { navn: 'Steinvei', ikon: '🧱', kost: { stein: 2 }, bruKost: { stein: 5 } }, // oppgradering fra tre
+};
+
+/**
+ * Handelsrute mellom to steder (landsbyer eller leiren) bundet sammen av vei:
+ *   mynter per dag = (størrelse A + størrelse B) × (1 + andel steinvei på veien) + ⌊lengde / perLengde⌋
+ */
+export const HANDEL = { perLengde: 5, leirStorrelse: 1 };
+
+/** Landsbyer vokser når de får mat. vekst[n] = korn som trengs for å gå fra størrelse n til n+1. */
+export const LANDSBY = {
+  maksStorrelse: 5,
+  vekst: { 1: 20, 2: 40, 3: 80, 4: 160 },
+  leveranse: 10, // korn per trykk på «Gi mat»
+};
+
+/**
+ * Marked i landsbyene (bare når landsbyen er koblet til leiren med vei).
+ * Hver landsby kjøper to av varene. Prisen synker litt for hver vare du selger,
+ * og henter seg inn igjen over natta.
+ */
+export const MARKED = {
+  pris: { tre: 2, korn: 2, stein: 4 },
+  fallPerVare: 0.97,
+  minFaktor: 0.4,
+  gjenopprettingPerDag: 0.25, // andel av avstanden opp til full pris som hentes inn hver natt
 };
