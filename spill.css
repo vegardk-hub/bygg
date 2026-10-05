@@ -312,3 +312,40 @@ main { position: relative; flex: 1; min-height: 0; }
 @keyframes bolge { to { background-position: -60px 0; } }
 .lastrad { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; font-size: 14px; }
 .lastrad button { min-height: 38px; padding: 2px 10px; font-size: 14px; }
+
+/* Fase 5: hendelser, sol ved ny dag */
+.hendelse { width: min(90%, 360px); padding: 18px 20px; text-align: center; color: var(--tekst); animation: hopp-inn 0.35s ease-out; }
+.hendelse::backdrop { background: rgba(10, 15, 25, 0.45); }
+.hendelse h2 { margin: 0 0 6px; font-size: 21px; }
+.hendelse p { margin: 0; }
+.hendelse-innhold { font-size: 28px; font-weight: 800; margin: 10px 0 4px; }
+.hendelse-innhold .pil { font-size: 20px; color: var(--dempet); margin: 0 8px; }
+@keyframes hopp-inn { from { transform: scale(0.85); opacity: 0; } 60% { transform: scale(1.04); } }
+.sol { position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  background: radial-gradient(circle at 80% 0%, rgba(255, 220, 120, 0.45), rgba(255, 200, 80, 0) 60%);
+  animation: sol 0.9s ease-out forwards; }
+@keyframes sol { from { opacity: 1; } to { opacity: 0; } }
+
+.hjelp ul { padding-left: 0; list-style: none; display: grid; gap: 8px; margin: 10px 0; font-size: 15px; }
+.hjelp li { line-height: 1.35; }
+
+/* Smal skjerm: råvarelinja holder seg på én rad og kan sveipes sidelengs. */
+@media (max-width: 640px) {
+  #hud { gap: 6px; padding-left: 6px; padding-right: 6px; }
+  .ravarer { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 4px; min-width: 0; }
+  .ravarer::-webkit-scrollbar { display: none; }
+  .ravare { padding: 3px 7px; gap: 2px; flex: none; }
+  .ravare .ikon { font-size: 16px; }
+  .ravare .tall { font-size: 15px; min-width: 0; }
+  .hud-hoyre { gap: 6px; flex: none; }
+  .dag { font-size: 14px; }
+  .dag b { font-size: 17px; }
+  button.rund { width: 42px; height: 42px; font-size: 19px; }
+}
+
+/* iPad på høykant: råvarelinja på én rad (sveip sidelengs om den ikke får plass). */
+@media (max-width: 900px) {
+  .ravarer { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+  .ravarer::-webkit-scrollbar { display: none; }
+  .ravare { flex: none; }
+}

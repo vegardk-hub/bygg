@@ -32,7 +32,11 @@ function veierFor(spill, verden, i) {
 
 /** Hva skal kortet for rute i vise akkurat nå? null = ingenting (svart). */
 export function innholdFor(spill, verden, i) {
-  if (!spill.avdekket[i]) return kanAvdekkes(spill, verden, i) ? { ukjent: true } : null;
+  if (!spill.avdekket[i]) {
+    // Skattekart: et ✕ i tåka – også langt inne i det ukjente.
+    if (spill.skattekart?.includes(i)) return { ukjent: true, kryss: true };
+    return kanAvdekkes(spill, verden, i) ? { ukjent: true } : null;
+  }
   const terreng = TERRENGNAVN[verden.terreng[i]];
   const vei = veierFor(spill, verden, i);
   const medVei = vei.length ? { vei } : {};
@@ -47,7 +51,7 @@ export function innholdFor(spill, verden, i) {
   return { terreng };
 }
 
-const signatur = (inn) => (inn.ukjent ? '?'
+const signatur = (inn) => (inn.ukjent ? (inn.kryss ? '?x' : '?')
   : `${inn.terreng}|${inn.bygg ?? ''}|${inn.nivaa ?? ''}|${inn.overlegg ?? ''}|${(inn.vei ?? []).map((v) => v.type + v.retninger).join(',')}`);
 
 // Kort tegnes i noen faste størrelser (enhetspiksler) og skaleres litt ved tegning.
@@ -68,7 +72,7 @@ export class Brett {
     lerret.width = lerret.height = str;
     const ctx = lerret.getContext('2d');
     const tilf = lagTilfeldig(blandSeed(this.verden.seed, this.verden.forsok, 'kort', i));
-    if (innhold.ukjent) tegnUkjent(ctx, str, tilf);
+    if (innhold.ukjent) tegnUkjent(ctx, str, tilf, { kryss: innhold.kryss });
     else tegnKort(ctx, str, tilf, { ...innhold, biom: this.verden.biom });
     const k = { sig: signatur(innhold), str, lerret };
     this.kort.set(i, k);

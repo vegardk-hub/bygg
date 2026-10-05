@@ -442,15 +442,19 @@ const BYGG = {
     molle(ctx, S * 0.5, S * 0.72, S * 1.45);
     for (const [x, y] of [[0.2, 0.86], [0.28, 0.9], [0.8, 0.88]]) sekk(ctx, S * x, S * y, S * 0.05);
   },
-  /** Landsbyen vokser synlig: størrelse 1 = to hus, 2 = tre hus, 3+ = kirke, 5 = flagg. */
+  /**
+   * Landsbyen vokser synlig: 1 = to hus og brønn, 2 = tre hus, 3 = kirke bakerst,
+   * 4 = torgbod midt i, 5 = flagg. Tegnes bakfra og fram så ingenting gjemmer seg.
+   */
   landsby(ctx, S, tilf, str = 2) {
-    hus(ctx, S * 0.32, S * 0.36, S * 0.26, S * 0.22, S * 0.14, S * 0.12, { vegg: FIGUR.pussVegg, tak: FIGUR.takBla });
-    if (str >= 2) hus(ctx, S * 0.72, S * 0.42, S * 0.24, S * 0.2, S * 0.13, S * 0.11, { vegg: FIGUR.treVegg, tak: FIGUR.takGronn });
-    if (str >= 3) kirke(ctx, S * 0.62, S * 0.66, S);
-    else bronn(ctx, S * 0.56, S * 0.66, S * 0.12);
-    if (str >= 4) hus(ctx, S * 0.82, S * 0.84, S * 0.2, S * 0.16, S * 0.11, S * 0.09, { vegg: FIGUR.treVegg, tak: FIGUR.takRod });
-    hus(ctx, S * 0.34, S * 0.8, S * 0.28, S * 0.22, S * 0.15, S * 0.12, { vegg: FIGUR.pussVegg, tak: FIGUR.takRod, pipe: true });
-    if (str >= 5) flagg(ctx, S * 0.14, S * 0.6, S * 0.36);
+    hus(ctx, S * 0.3, S * 0.34, S * 0.26, S * 0.22, S * 0.14, S * 0.12, { vegg: FIGUR.pussVegg, tak: FIGUR.takBla });
+    if (str >= 3) kirke(ctx, S * 0.8, S * 0.42, S);
+    else if (str >= 2) hus(ctx, S * 0.72, S * 0.42, S * 0.24, S * 0.2, S * 0.13, S * 0.11, { vegg: FIGUR.treVegg, tak: FIGUR.takGronn });
+    if (str >= 5) flagg(ctx, S * 0.12, S * 0.62, S * 0.34);
+    if (str >= 4) torgbod(ctx, S * 0.55, S * 0.64, S * 0.15);
+    else if (str < 3) bronn(ctx, S * 0.58, S * 0.66, S * 0.12);
+    hus(ctx, S * 0.32, S * 0.82, S * 0.28, S * 0.22, S * 0.15, S * 0.12, { vegg: FIGUR.pussVegg, tak: FIGUR.takRod, pipe: true });
+    if (str >= 3) hus(ctx, S * 0.76, S * 0.84, S * 0.22, S * 0.18, S * 0.12, S * 0.1, { vegg: FIGUR.treVegg, tak: FIGUR.takGronn });
   },
 };
 
@@ -684,6 +688,22 @@ function sekk(ctx, x, y, r) {
   poly(ctx, [[x + r * 0.3, y - r * 1.7], [x + r * 0.9, y - r * 1.3], [x + r, y], [x + r * 0.2, y]], '#cfc2a3');
 }
 
+/** Torgbod med stripet tak. */
+function torgbod(ctx, x, y, b) {
+  skygge(ctx, x + b * 0.1, y, b * 0.7, b * 0.2);
+  kasse(ctx, x, y, b, b * 0.6, b * 0.35, { topp: '#c49460', venstre: '#a8784a', hoyre: '#8a5c38' });
+  ctx.fillStyle = '#6d4a30';
+  for (const dx of [-0.42, 0.42]) ctx.fillRect(x + b * dx, y - b * 0.95, b * 0.05, b * 0.65);
+  for (let k = 0; k < 5; k++) {
+    const x0 = x - b * 0.55 + k * b * 0.22;
+    poly(ctx, [[x0, y - b * 0.95], [x0 + b * 0.22, y - b * 0.95], [x0 + b * 0.22, y - b * 0.72], [x0, y - b * 0.72]], k % 2 ? '#f4ecd8' : '#c0392b');
+  }
+  for (const [dx, f] of [[-0.25, '#e07a3a'], [0, '#8fc25a'], [0.25, '#d0453f']]) {
+    ctx.fillStyle = f;
+    ctx.beginPath(); ctx.arc(x + b * dx, y - b * 0.4, b * 0.08, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
 /** Liten hvit kirke med tårn og spir. */
 function kirke(ctx, x, y, S) {
   const vegg = { topp: '#f4ecd8', venstre: '#f4ecd8', hoyre: '#cfc2a3' };
@@ -753,10 +773,24 @@ export function tegnKort(ctx, S, tilf, { terreng, bygg, nivaa = 1, overlegg, vei
 }
 
 /** Ruter man kan avdekke: mørkt kort med et svakt spørsmålstegn. */
-export function tegnUkjent(ctx, S, tilf) {
+export function tegnUkjent(ctx, S, tilf, { kryss = false } = {}) {
   ctx.save();
   bunn(ctx, S, BUNN.front, tilf, { flak: 6, tuster: 0 });
   kantskygge(ctx, S, BUNN.front);
+  if (kryss) {
+    // Skattekart: rødt ✕ malt på kartet.
+    ctx.lineCap = 'round';
+    for (const [farge, b] of [['rgba(0,0,0,0.5)', 0.13], ['#d9483b', 0.09]]) {
+      ctx.strokeStyle = farge;
+      ctx.lineWidth = S * b;
+      ctx.beginPath();
+      ctx.moveTo(S * 0.3, S * 0.3); ctx.lineTo(S * 0.7, S * 0.7);
+      ctx.moveTo(S * 0.7, S * 0.3); ctx.lineTo(S * 0.3, S * 0.7);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
   ctx.fillStyle = 'rgba(250, 242, 219, 0.22)';
   ctx.font = `700 ${Math.round(S * 0.34)}px system-ui, sans-serif`;
   ctx.textAlign = 'center';

@@ -14,6 +14,8 @@ const MIGRERINGER = {
   2: (d) => ({ ...d, versjon: 3, lager: { fisk: 0, kjott: 0, jern: 0, ...d.lager } }),
   // Versjon 4 (fase 4): flere verdener og skip. Den gamle verdenen blir verden nr. 0.
   3: (d) => ({ ...d, versjon: 4, biom: 'temperert', navn: 'Hjemøya', rotSeed: d.seed, aktiv: 0, verdener: [null], skip: null }),
+  // Versjon 5 (fase 5): hendelser og skattekart.
+  4: (d) => ({ ...d, versjon: 5, skattekart: [], hendelse: null, sisteHendelse: 0 }),
 };
 
 /** Én verden (feltene i VERDENSFELT + lager) som ren data. */
@@ -25,6 +27,7 @@ function verdenTilData(w) {
     brukt: [...w.brukt],
     veier: [...w.veier],
     flytt: w.flytt.map((f) => [...f]),
+    skattekart: [...(w.skattekart ?? [])],
     landsbyer: [...w.landsbyer].map(([i, l]) => [i, { ...l, priser: { ...l.priser }, oppdrag: l.oppdrag ? { ...l.oppdrag } : null }]),
     lager: { ...w.lager },
   };
@@ -38,6 +41,7 @@ function verdenFraData(d) {
     brukt: new Set(d.brukt),
     veier: new Map(d.veier ?? []),
     flytt: d.flytt ?? [],
+    skattekart: d.skattekart ?? [],
     landsbyer: new Map(d.landsbyer ?? []),
     lager: d.lager,
   };
@@ -57,6 +61,8 @@ export function tilData(spill) {
     aktiv: spill.aktiv,
     verdener: spill.verdener.map((w) => (w ? verdenTilData(w) : null)),
     skip: spill.skip ? { ...spill.skip, last: { ...spill.skip.last } } : null,
+    hendelse: spill.hendelse ?? null,
+    sisteHendelse: spill.sisteHendelse ?? 0,
     lagret: Date.now(),
   };
 }
@@ -80,6 +86,8 @@ export function fraData(data) {
     aktiv: d.aktiv,
     verdener: d.verdener.map((w) => (w ? verdenFraData(w) : null)),
     skip: d.skip,
+    hendelse: d.hendelse ?? null,
+    sisteHendelse: d.sisteHendelse ?? 0,
   };
 }
 

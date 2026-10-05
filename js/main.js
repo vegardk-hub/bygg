@@ -42,6 +42,13 @@ async function start() {
     lastInn(spill, verden);
     P.melding('Velkommen! Trykk på en ?-rute i tåka for å utforske.');
   }
+  // Første gang: vis «Slik spiller du».
+  try {
+    if (!localStorage.getItem('bygg-hjelp-vist')) {
+      $('hjelp').showModal();
+      localStorage.setItem('bygg-hjelp-vist', '1');
+    }
+  } catch { /* privat modus: hopp over */ }
   koblKnapper();
   window.addEventListener('resize', () => { kamera.tilpassLerret(); tegn(); });
 }
@@ -174,6 +181,14 @@ function tilHavna() {
   tegn();
 }
 
+/** Et lite varmt lysglimt over kartet når en ny dag starter. */
+function solglimt() {
+  const el = document.createElement('div');
+  el.className = 'sol';
+  document.querySelector('main').append(el);
+  setTimeout(() => el.remove(), 1000);
+}
+
 function settVeimodus(paa) {
   t.veimodus = paa;
   $('veimodus').classList.toggle('aktiv', paa);
@@ -266,6 +281,25 @@ function behandle(hendelser) {
       case 'oppdrag':
         P.melding(h.tekst);
         break;
+      case 'hendelse':
+        // Vises litt etter de flytende tallene, så det ikke blir for mye på en gang.
+        setTimeout(() => {
+          lyd('funn');
+          P.visHendelse(t.spill, h, {
+            ja: () => { if (h.valg) behandle(S.svarHendelse(t.spill, true)); },
+            nei: () => behandle(S.svarHendelse(t.spill, false)),
+            vis: () => {
+              const B = t.verden.bredde;
+              kamera.sentrer(((h.i % B) + 0.5) * RUTE, (Math.floor(h.i / B) + 0.5) * RUTE);
+              tegn();
+            },
+          });
+        }, 900);
+        break;
+      case 'byttet':
+        P.melding(`🤝 Byttet ${P.gaveTekst(h.gi).replace('+', '')} mot ${P.gaveTekst(h.faa)}`);
+        lyd('mynt');
+        break;
       case 'skip':
         P.melding(h.tekst, 'maal');
         lyd('oppgrader');
@@ -297,6 +331,7 @@ function behandle(hendelser) {
       }
       case 'nyDag':
         lyd('dag');
+        solglimt();
         $('ny-dag').classList.remove('vipp');
         void $('ny-dag').offsetWidth;
         $('ny-dag').classList.add('vipp');
@@ -401,6 +436,8 @@ function koblKnapper() {
   $('lukk-panel').onclick = () => velg(null);
   $('meny-knapp').onclick = aapneMeny;
   $('meny-havkart').onclick = () => { $('meny').close(); aapneHavkart(); };
+  $('meny-hjelp').onclick = () => { $('meny').close(); $('hjelp').showModal(); };
+  $('lukk-hjelp').onclick = () => $('hjelp').close();
   $('lukk-havkart').onclick = () => $('havkart').close();
   // Mål-kortet kan klappes sammen; på smale skjermer starter det sammenklappet.
   let sammen = window.innerWidth < 1000;
@@ -424,7 +461,7 @@ function koblKnapper() {
   };
   // Tastatur på PC: mellomrom = ny dag, Esc = lukk panel.
   window.addEventListener('keydown', (e) => {
-    if ($('meny').open || $('havkart').open || e.target.tagName === 'TEXTAREA') return;
+    if ($('meny').open || $('havkart').open || $('hendelse').open || $('hjelp').open || e.target.tagName === 'TEXTAREA') return;
     if (e.code === 'Space') { e.preventDefault(); nyDag(); }
     if (e.code === 'Escape') { velg(null); settVeimodus(false); }
     if (e.code === 'KeyV') settVeimodus(!t.veimodus);
@@ -471,6 +508,11 @@ function visKodefelt(modus) {
       }
     };
   }
+}
+
+// Offline og Hjem-skjerm: registrer service worker (bare over http(s), ikke file://).
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('Service worker:', e));
 }
 
 start().catch((e) => {

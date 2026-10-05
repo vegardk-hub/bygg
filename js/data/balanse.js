@@ -199,3 +199,12 @@ export const BIOM = {
   sno: { navn: 'Snøland', ikon: '❄️' },
   jungel: { navn: 'Jungel', ikon: '🌴' },
 };
+
+// ---------------------------------------------------------------------------
+// Fase 5: hendelser når dagen skifter (bare hyggelige – spillet er koselig)
+// ---------------------------------------------------------------------------
+export const HENDELSE = {
+  sjanse: 0.35,          // sjanse for en hendelse en ny dag …
+  minstDagerMellom: 2,   // … men aldri oftere enn dette
+  vekt: { handelsmann: 3, avling: 3, festival: 2, gave: 2, skattekart: 2 },
+};

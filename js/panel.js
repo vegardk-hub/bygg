@@ -392,3 +392,30 @@ export function visRutepanel(spill, verden, i, h) {
 export function skjulRutepanel() {
   $('rutepanel').hidden = true;
 }
+
+// ---------------------------------------------------------------------------
+// Hendelser
+// ---------------------------------------------------------------------------
+/** Viser et hendelseskort. h = hendelsen, valg = { ja(), nei(), vis() }. */
+export function visHendelse(spill, h, valg) {
+  $('hendelse-tittel').textContent = h.tittel;
+  $('hendelse-tekst').textContent = h.tekst;
+  const innhold = $('hendelse-innhold');
+  const knapper = $('hendelse-knapper');
+  if (h.art === 'handelsmann') {
+    innhold.innerHTML = `${gaveTekst(h.gi).replace('+', '')}<span class="pil">→</span>${gaveTekst(h.faa).replace('+', '')}`;
+    const harRad = Object.entries(h.gi).every(([r, n]) => (spill.lager[r] || 0) >= n);
+    knapper.innerHTML = `<button class="hoved" data-ja ${harRad ? '' : 'disabled'}>🤝 Bytt!</button><button data-nei>Nei takk</button>`;
+    if (!harRad) innhold.insertAdjacentHTML('beforeend', `<p class="liten">Du mangler ${manglerTekst(h.gi, spill.lager)}</p>`);
+  } else if (h.art === 'skattekart') {
+    innhold.textContent = '🗺️ ✕';
+    knapper.innerHTML = '<button class="hoved" data-vis>👀 Vis meg!</button>';
+  } else {
+    innhold.textContent = gaveTekst(h.gave);
+    knapper.innerHTML = '<button class="hoved" data-ja>😊 Flott!</button>';
+  }
+  knapper.querySelectorAll('[data-ja]').forEach((b) => { b.onclick = () => { $('hendelse').close(); valg.ja(); }; });
+  knapper.querySelectorAll('[data-nei]').forEach((b) => { b.onclick = () => { $('hendelse').close(); valg.nei(); }; });
+  knapper.querySelectorAll('[data-vis]').forEach((b) => { b.onclick = () => { $('hendelse').close(); valg.vis(); }; });
+  $('hendelse').showModal();
+}

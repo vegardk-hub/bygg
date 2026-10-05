@@ -9,7 +9,7 @@ import { navngiLandsbyer } from './navn.js';
 import { T, START } from './data/terreng.js';
 import {
   START_LAGER, AVDEKK, BYGG, BYGG_KOSTVEKST, NIVAA, OPPGRADER_KOSTVEKST, MAKS_NIVAA, PRIS, FUNN,
-  RAVARE_REKKEFOLGE, VEI, LANDSBY, MARKED, OPPDRAG, SKIP, REISE, BIOM,
+  RAVARE_REKKEFOLGE, VEI, LANDSBY, MARKED, OPPDRAG, SKIP, REISE, BIOM, HENDELSE, RAVARER,
 } from './data/balanse.js';
 import { MAAL, SYNLIGE_MAAL } from './data/maal.js';
 import {
@@ -17,7 +17,7 @@ import {
 } from './veinett.js';
 import { blandSeed, lagTilfeldig } from './rng.js';
 
-export const SPILL_VERSJON = 4;
+export const SPILL_VERSJON = 5;
 
 /** Statistikk-feltene. Nye felt får 0 når en gammel lagring lastes. */
 export const TOM_STAT = {
@@ -38,7 +38,7 @@ export const TOM_STAT = {
 // statistikk er felles for alle verdener.
 
 /** Feltene som hører til én verden (resten av `spill` er felles). */
-export const VERDENSFELT = ['seed', 'str', 'biom', 'navn', 'avdekket', 'bygg', 'brukt', 'veier', 'landsbyer', 'flytt'];
+export const VERDENSFELT = ['seed', 'str', 'biom', 'navn', 'avdekket', 'bygg', 'brukt', 'veier', 'landsbyer', 'flytt', 'skattekart'];
 
 const VERDENSNAVN = {
   temperert: [['Grønn', 'Lyng', 'Bjørke', 'Eike', 'Kløver'], ['øya', 'holmen', 'landet']],
@@ -64,6 +64,7 @@ function lagVerdensTilstand(seed, str, biom, medHavn) {
     veier: new Map(),         // rute → 'tre' | 'stein'
     landsbyer: new Map(),     // rute → { str, mat, priser, oppdrag … } for landsbyer man har funnet
     flytt: [],                // [fra, til] for dyr som har flyttet seg (til = -1: gått inn i skogen)
+    skattekart: [],           // skjulte skatter du har fått kart over (vises med ✕ i tåka)
     lager: {},                // råvarene i denne verdenen (mynter er felles)
   };
   const r = START.avdekketRadius;
@@ -104,6 +105,8 @@ export function nyttSpill(seed, str = 32) {
     aktiv: 0,
     verdener: [null],
     skip: null,                // { nivaa, plass (verden), last: { vare: n } }
+    hendelse: null,            // en hendelse som venter på svar (handelsmannen)
+    sisteHendelse: 0,          // dagen forrige hendelse kom
     ...w,
     lager: { ...START_LAGER },
   };
@@ -136,7 +139,7 @@ function taUtVerden(spill) {
 }
 
 function settInnVerden(spill, w) {
-  for (const f of VERDENSFELT) spill[f] = w[f];
+  for (const f of VERDENSFELT) spill[f] = w[f] ?? (f === 'skattekart' ? [] : w[f]);
   spill.lager = { ...Object.fromEntries(RAVARE_REKKEFOLGE.map((r) => [r, 0])), ...w.lager, mynter: spill.lager.mynter };
 }
 
@@ -200,9 +203,12 @@ export function kanAvdekkes(spill, verden, i) {
 
 /** Prisen for neste rute (land eller vann), uavhengig av hvilken rute det er. */
 export function avdekkPris(spill, vann = false) {
-  // Kartstjerner (én per verden du har oppdaget) gjør avdekking billigere.
+  // Prisen stiger med hvor mye som er avdekket i *denne* verdenen (startområdet teller ikke),
+  // så en ny øy er en frisk start. Kartstjerner (én per verden du har oppdaget) gir rabatt.
+  let avdekket = -((2 * START.avdekketRadius + 1) ** 2);
+  for (let i = 0; i < spill.avdekket.length; i++) avdekket += spill.avdekket[i];
   const rabatt = Math.max(REISE.minstePrisFaktor, REISE.kartstjerneRabatt ** kartstjerner(spill));
-  const pris = AVDEKK.grunn * AVDEKK.vekst ** spill.stat.avdekket * rabatt;
+  const pris = AVDEKK.grunn * AVDEKK.vekst ** Math.max(0, avdekket) * rabatt;
   return Math.max(1, Math.round(pris * (vann ? AVDEKK.vannFaktor : 1)));
 }
 
@@ -220,6 +226,7 @@ export function avdekk(spill, verden, i) {
   const hendelser = [{ type: 'avdekket', i }];
 
   const o = verden.overlegg.get(i);
+  spill.skattekart = (spill.skattekart ?? []).filter((j) => j !== i);
   if (o?.type === 'skatt' && !spill.brukt.has(i)) {
     const mynter = FUNN.skatt.grunn + FUNN.skatt.perTidligere * spill.stat.skatter;
     spill.brukt.add(i);
@@ -377,7 +384,85 @@ export function nyDag(spill, verden) {
   });
   spill.dag++;
   spill.stat.dager++;
+  const hendelse = trekkHendelse(spill, verden);
+  if (hendelse) hendelser.push(hendelse);
   return [{ type: 'nyDag', dag: spill.dag }, ...hendelser].concat(sjekkMaal(spill));
+}
+
+// ---------------------------------------------------------------------------
+// Hendelser: små, hyggelige overraskelser når dagen skifter
+// ---------------------------------------------------------------------------
+const VARER = () => RAVARE_REKKEFOLGE.filter((r) => r !== 'mynter');
+
+/** Kanskje en hendelse i dag. Bestemt av verden og dag, så den er lik om man laster på nytt. */
+export function trekkHendelse(spill, verden) {
+  spill.hendelse = null; // et ubesvart tilbud fra i går er borte
+  if (spill.dag - (spill.sisteHendelse ?? 0) < HENDELSE.minstDagerMellom) return null;
+  const tilf = lagTilfeldig(blandSeed(spill.rotSeed ?? spill.seed, 'hendelse', spill.dag));
+  if (!tilf.sjanse(HENDELSE.sjanse)) return null;
+  // Velg blant hendelsene som gir mening akkurat nå.
+  const inntekt = inntektPerDag(spill, verden);
+  const koblet = [...verden.landsbynavn.keys()].filter((i) => spill.avdekket[i] && kobletTilLeiren(spill, verden, i));
+  const skjulteSkatter = [...verden.overlegg].filter(([i, o]) => o.type === 'skatt' && !spill.avdekket[i] && !spill.brukt.has(i)
+    && !(spill.skattekart ?? []).includes(i)).map(([i]) => i);
+  const produserte = VARER().filter((r) => inntekt[r] > 0);
+  const mulige = Object.entries(HENDELSE.vekt).filter(([art]) => {
+    if (art === 'festival' || art === 'gave') return koblet.length > 0;
+    if (art === 'skattekart') return skjulteSkatter.length > 0;
+    if (art === 'avling') return produserte.length > 0;
+    return true;
+  });
+  let r = tilf.tall() * mulige.reduce((a, [, v]) => a + v, 0);
+  const [art] = mulige.find(([, v]) => (r -= v) < 0) ?? mulige[0];
+  spill.sisteHendelse = spill.dag;
+
+  if (art === 'handelsmann') {
+    // Et byttetilbud: gi noe du har mye av, få noe annet (litt bedre enn markedet).
+    const har = VARER().filter((v) => (spill.lager[v] || 0) >= 10).sort((a, b) => spill.lager[b] - spill.lager[a]);
+    const gi = har[0] ?? 'korn';
+    const faa = tilf.velg(VARER().filter((v) => v !== gi));
+    const giN = 10 + 5 * tilf.heltall(0, 2);
+    const faaN = Math.max(3, Math.round((giN * MARKED.pris[gi] * 1.4) / MARKED.pris[faa]));
+    spill.hendelse = { art, gi: { [gi]: giN }, faa: { [faa]: faaN } };
+    return { type: 'hendelse', art, valg: true, gi: { [gi]: giN }, faa: { [faa]: faaN },
+      tittel: '🧳 En vandrende handelsmann', tekst: 'Han vil gjerne bytte med deg!' };
+  }
+  if (art === 'avling') {
+    const vare = tilf.velg(produserte);
+    const n = inntekt[vare];
+    gi(spill, { [vare]: n });
+    const ord = { korn: 'God avling', tre: 'Godt hogstvær', stein: 'Lett å bryte stein', fisk: 'Fisken biter', kjott: 'God jakt', jern: 'Rik malmåre' };
+    return { type: 'hendelse', art, gave: { [vare]: n }, tittel: `☀️ ${ord[vare] ?? 'Flott dag'}!`, tekst: 'Du får en ekstra dags produksjon av' };
+  }
+  if (art === 'festival') {
+    const i = tilf.velg(koblet);
+    const ruter = handelsruter(spill, verden).filter((rt) => rt.a === i || rt.b === i);
+    const n = Math.max(10, ruter.reduce((a, rt) => a + rt.mynter, 0) * 2);
+    gi(spill, { mynter: n });
+    return { type: 'hendelse', art, i, gave: { mynter: n }, tittel: `🎉 Festival i ${verden.landsbynavn.get(i)}!`, tekst: 'Alle kommer for å handle. Du tjener' };
+  }
+  if (art === 'gave') {
+    const i = tilf.velg(koblet);
+    const vare = tilf.velg(['korn', 'fisk', 'kjott', 'tre', 'stein']);
+    const n = 8 + 4 * (landsby(spill, verden, i).str);
+    gi(spill, { [vare]: n });
+    return { type: 'hendelse', art, i, gave: { [vare]: n }, tittel: `🎁 Gave fra ${verden.landsbynavn.get(i)}`, tekst: 'Takk for veien! De gir deg' };
+  }
+  // Skattekart: vis hvor en skjult skatt ligger.
+  const i = tilf.velg(skjulteSkatter);
+  spill.skattekart = [...(spill.skattekart ?? []), i];
+  return { type: 'hendelse', art, i, tittel: '🗺️ Et gammelt skattekart!', tekst: 'Det viser hvor en skatt ligger gjemt i tåka. Se etter ✕ og utforsk dit!' };
+}
+
+/** Svar på handelsmannens tilbud. */
+export function svarHendelse(spill, ja) {
+  const h = spill.hendelse;
+  spill.hendelse = null;
+  if (!h || !ja) return [];
+  if (!harRad(spill, h.gi)) return [{ type: 'feil', tekst: 'Du har ikke nok til å bytte.', mangler: h.gi }];
+  trekk(spill, h.gi);
+  gi(spill, h.faa);
+  return [{ type: 'byttet', gi: h.gi, faa: h.faa }].concat(sjekkMaal(spill));
 }
 
 /** Produksjon i en verden du ikke er i: råvarer til dens lager (med tak), handel gir mynter til deg. */

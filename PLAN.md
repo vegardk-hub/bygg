@@ -161,7 +161,7 @@ All tallbalanse samles i én fil (`data/balanse.js`) så det er lett å justere.
 | 2 ✅ | Landsbyer, veier (tre → stein), handelsruter, marked | Veibygging føles lønnsomt |
 | 3 ✅ | Alle råvarer, dyr, fisk, jern, nabobonuser, oppdrag | Variert midtspill |
 | 4 ✅ | Havn, skip, ny verden, havkart, seiling fram og tilbake, lager i gamle verdener, kartstjerner, nye biomer | Det er morsomt å seile tilbake og hente last |
-| 5 | Hendelser, lyd, juice, PWA-polish, iPad-test, balansering | Klar for familien |
+| 5 ✅ | Hendelser, lyd, juice, PWA-polish, iPad-test, balansering | Klar for familien |
 
 ---
 
@@ -257,3 +257,15 @@ mørkere kanter, svart bakgrunn `#010101`, klammer `#faf2db`). All grafikk er te
 - Verdener du ikke er i produserer til eget lager (tak 100 per vare – taket tar aldri bort noe), handel der gir mynter.
 - Biomer: egne bunnfarger, kaktus/snøgran/palme. Lagring versjon 4 med migrering. 7 nye mål.
 - Testet: regeltester for skip/verdener/lagring i Node, hel seilas fram og tilbake i nettleseren.
+
+## Status fase 5 (2026-10-05)
+- Hendelser ved ny dag (ca. hver 3.–4. dag, aldri oftere enn annenhver): vandrende handelsmann (byttetilbud), god avling/jakt/fangst,
+  festival i en landsby, gave fra en landsby, skattekart (rødt ✕ i tåka, «Vis meg!» flytter kartet dit). Bare hyggelige hendelser.
+- PWA: `manifest.webmanifest`, `sw.js` (svar fra lageret, oppdater i bakgrunnen – ny versjon fra GitHub ved neste åpning),
+  ikoner i `ikoner/` (laget med `verktoy/lag_ikon.py`), Apple-meta for Hjem-skjerm.
+- «Slik spiller du» vises første gang og ligger i menyen. Sollys når dagen skifter.
+- Råvarelinja på én rad (sveip) på mobil og iPad på høykant.
+- Landsby: kirke bakerst, torgbod på størrelse 4, flagg på 5 – ingenting overlapper.
+- Balanse: avdekkingsprisen regnes nå per verden (ny øy = frisk start, kartstjerner gir rabatt). 100-dagers simulering på tre kart: handel 40–260 🪙/dag.
+- Lagring versjon 5. Tester: regler, vei/handel, skip/verdener, hendelser (Node) + nettleser.
+- Merk ved utvikling: service workeren gir gammel kode første gang etter en endring (last på nytt to ganger, eller avregistrer i DevTools).

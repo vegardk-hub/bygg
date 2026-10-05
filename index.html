@@ -4,8 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Bygg">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="theme-color" content="#f6f1e4">
+  <meta name="description" content="Koselig byggespill på brett: utforsk tåka, bygg, lag veier og seil til nye øyer.">
   <title>Bygg</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="ikoner/ikon-180.png">
+  <link rel="icon" type="image/png" href="ikoner/ikon-192.png">
   <link rel="stylesheet" href="spill.css">
 </head>
 <body>
@@ -51,6 +58,7 @@
       <button id="lyd-knapp"></button>
       <button id="vis-kode">💾 Lagrekode</button>
       <button id="les-kode">📥 Last inn lagrekode</button>
+      <button id="meny-hjelp">❓ Slik spiller du</button>
       <button id="meny-havkart">🗺️ Havkartet</button>
       <button id="nytt-spill">🌍 Nytt spill (start helt på nytt)</button>
       <a class="knapp" href="verksted.html">🗺️ Kartverksted</a>
@@ -70,6 +78,29 @@
     <p class="liten" id="havkart-info"></p>
     <div id="havkart-hav" class="hav"></div>
     <div class="menyknapper"><button id="lukk-havkart" class="hoved">Lukk</button></div>
+  </dialog>
+
+  <dialog id="hjelp" class="kort meny hjelp">
+    <h2>Slik spiller du 🏝️</h2>
+    <ul>
+      <li><b>🔍 Utforsk:</b> trykk på en <b>?</b>-rute i tåka. Det koster litt mynter.</li>
+      <li><b>🪓 Bygg:</b> trykk på en rute du ser. Hogstbu i skogen, gård på enga, steinbrudd på åsen. Bygg ved siden av hverandre for bonus!</li>
+      <li><b>☀️ Ny dag:</b> trykk på den store knappen – byggene lager råvarer.</li>
+      <li><b>🛒 Selg:</b> i leiren, eller i landsbyene som betaler bedre.</li>
+      <li><b>🛤️ Vei:</b> bygg vei mellom leiren og landsbyene. Det gir mynter hver dag!</li>
+      <li><b>🧺 Landsbyer:</b> gi dem mat så de vokser, og løs oppdragene deres.</li>
+      <li><b>⚓ Seil:</b> bygg havn og skip, og oppdag nye øyer med ørken, snø og jungel.</li>
+      <li><b>🎯 Mål:</b> lurer du på hva du skal gjøre? Se på målene øverst.</li>
+    </ul>
+    <p class="liten">Spillet lagres av seg selv. Ingenting kan gå tapt – det er bare å bygge i ditt eget tempo.</p>
+    <div class="menyknapper"><button id="lukk-hjelp" class="hoved">Kom i gang!</button></div>
+  </dialog>
+
+  <dialog id="hendelse" class="kort hendelse">
+    <h2 id="hendelse-tittel"></h2>
+    <p id="hendelse-tekst"></p>
+    <div id="hendelse-innhold" class="hendelse-innhold"></div>
+    <div id="hendelse-knapper" class="menyknapper"></div>
   </dialog>
 
   <div id="seiling" class="seiling" hidden>

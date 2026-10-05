@@ -179,6 +179,34 @@ const DAGER = Number(process.argv[3] ?? 60);
 }
 
 // ---------------------------------------------------------------------------
+// 1d. Hendelser
+// ---------------------------------------------------------------------------
+{
+  const { spill, verden } = Spill.nyttSpill(seed, 32);
+  spill.lager = { mynter: 500, tre: 200, stein: 200, korn: 200, fisk: 50, kjott: 50, jern: 50 };
+  const arter = new Map();
+  let byttet = false;
+  for (let d = 0; d < 80; d++) {
+    for (const h of Spill.nyDag(spill, verden)) {
+      if (h.type !== 'hendelse') continue;
+      arter.set(h.art, (arter.get(h.art) || 0) + 1);
+      if (h.art === 'handelsmann' && !byttet) {
+        const [[gi, giN]] = Object.entries(h.gi), [[faa, faaN]] = Object.entries(h.faa);
+        const for_ = { gi: spill.lager[gi], faa: spill.lager[faa] };
+        Spill.svarHendelse(spill, true);
+        assert.equal(spill.lager[gi], for_.gi - giN);
+        assert.equal(spill.lager[faa], for_.faa + faaN);
+        byttet = true;
+      }
+    }
+  }
+  const antall = [...arter.values()].reduce((a, b) => a + b, 0);
+  assert.ok(antall >= 8 && antall <= 30, `rimelig mange hendelser på 80 dager (${antall})`);
+  assert.ok(arter.has('handelsmann') && byttet, 'handelsmannen kom og byttet');
+  console.log(`✓ hendelsestester ok (${[...arter].map(([a, n]) => `${a} ${n}`).join(', ')})`);
+}
+
+// ---------------------------------------------------------------------------
 // 2. Robot-simulering
 // ---------------------------------------------------------------------------
 const { spill, verden } = nyttSpill(seed, 32);
