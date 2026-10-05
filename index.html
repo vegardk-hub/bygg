@@ -12,7 +12,7 @@
   <header id="hud">
     <div id="ravarer" class="ravarer"></div>
     <div class="hud-hoyre">
-      <div class="dag">Dag <b id="dag">1</b></div>
+      <div class="dag"><span id="verdensnavn" class="verdensnavn"></span> Dag <b id="dag">1</b></div>
       <button id="meny-knapp" class="rund" aria-label="Meny">☰</button>
     </div>
   </header>
@@ -51,7 +51,8 @@
       <button id="lyd-knapp"></button>
       <button id="vis-kode">💾 Lagrekode</button>
       <button id="les-kode">📥 Last inn lagrekode</button>
-      <button id="nytt-spill">🌍 Nytt spill (ny verden)</button>
+      <button id="meny-havkart">🗺️ Havkartet</button>
+      <button id="nytt-spill">🌍 Nytt spill (start helt på nytt)</button>
       <a class="knapp" href="verksted.html">🗺️ Kartverksted</a>
       <button id="lukk-meny" class="hoved">Fortsett å spille</button>
     </div>
@@ -63,6 +64,19 @@
       </div>
     </div>
   </dialog>
+
+  <dialog id="havkart" class="kort havkart">
+    <h2>🗺️ Havkartet</h2>
+    <p class="liten" id="havkart-info"></p>
+    <div id="havkart-hav" class="hav"></div>
+    <div class="menyknapper"><button id="lukk-havkart" class="hoved">Lukk</button></div>
+  </dialog>
+
+  <div id="seiling" class="seiling" hidden>
+    <div class="bolger"></div>
+    <div class="baat">⛵</div>
+    <p id="seiling-tekst"></p>
+  </div>
 
   <script type="module" src="js/main.js"></script>
 </body>

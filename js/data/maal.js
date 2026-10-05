@@ -31,6 +31,9 @@ export const MAAL = [
   { id: 'tjen200',   tekst: 'Tjen 200 mynter totalt',       maal: 200, verdi: (s) => s.stat.tjent,         belonning: { tre: 20 } },
   { id: 'landsby3',  tekst: 'Finn 3 landsbyer',             maal: 3,   verdi: (s) => s.stat.landsbyer,     belonning: { mynter: 40 } },
   { id: 'koble3',    tekst: 'Koble 3 landsbyer til leiren', maal: 3,   verdi: (s) => s.stat.kobletLandsbyer, belonning: { mynter: 60 } },
+  { id: 'havn1',     tekst: 'Bygg en havn ved vannet',      maal: 1,   verdi: (s) => sumBygg(s, 'havn'),    belonning: { tre: 15 } },
+  { id: 'skip1',     tekst: 'Bygg et skip i havna',         maal: 1,   verdi: (s) => (s.skip ? 1 : 0),     belonning: { mynter: 30 } },
+  { id: 'reise1',    tekst: 'Seil til en ny verden',        maal: 2,   verdi: (s) => s.stat.verdener,      belonning: { mynter: 50 } },
   { id: 'vekst3',    tekst: 'Få en landsby til størrelse 3', maal: 3,  verdi: (s) => s.stat.storsteLandsby, belonning: { stein: 15 } },
   { id: 'mat3',      tekst: 'Gi landsbyer korn, fisk og kjøtt', maal: 3, verdi: (s) => [1, 2, 4].filter((b) => s.stat.matTyper & b).length, belonning: { mynter: 40 } },
   { id: 'sagbruk1',  tekst: 'Bygg et sagbruk ved en hogstbu', maal: 1, verdi: (s) => sumBygg(s, 'sagbruk'), belonning: { jern: 3 } },
@@ -40,11 +43,15 @@ export const MAAL = [
   { id: 'bygg12',    tekst: 'Ha 12 bygg',                   maal: 12,  verdi: (s) => sumBygg(s) - 1,       belonning: { stein: 25 } },
   { id: 'skatt5',    tekst: 'Finn 5 skatter',               maal: 5,   verdi: (s) => s.stat.skatter,       belonning: { mynter: 80 } },
   { id: 'oppdrag5',  tekst: 'Fullfør 5 oppdrag',            maal: 5,   verdi: (s) => s.stat.oppdrag,       belonning: { mynter: 80 } },
+  { id: 'frakt50',   tekst: 'Frakt 50 råvarer med skipet',  maal: 50,  verdi: (s) => s.stat.fraktet,       belonning: { jern: 5 } },
+  { id: 'reise3',    tekst: 'Seil 3 ganger',                maal: 3,   verdi: (s) => s.stat.reiser,        belonning: { mynter: 60 } },
   { id: 'tjen1000',  tekst: 'Tjen 1000 mynter totalt',      maal: 1000, verdi: (s) => s.stat.tjent,        belonning: { korn: 50 } },
   { id: 'handel500', tekst: 'Tjen 500 mynter på handel',    maal: 500, verdi: (s) => s.stat.handel,        belonning: { mynter: 100 } },
   { id: 'vekst5',    tekst: 'Få en landsby til størrelse 5', maal: 5,  verdi: (s) => s.stat.storsteLandsby, belonning: { mynter: 150 } },
+  { id: 'verden3',   tekst: 'Oppdag 3 verdener',            maal: 3,   verdi: (s) => s.stat.verdener,      belonning: { mynter: 150 } },
   { id: 'oppdrag15', tekst: 'Fullfør 15 oppdrag',           maal: 15,  verdi: (s) => s.stat.oppdrag,       belonning: { mynter: 200 } },
   { id: 'avdekk200', tekst: 'Avdekk 200 ruter',             maal: 200, verdi: (s) => s.stat.avdekket,      belonning: { mynter: 150 } },
+  { id: 'verden4',   tekst: 'Oppdag alle fire landskap',    maal: 4,   verdi: (s) => s.stat.verdener,      belonning: { mynter: 300 } },
 ];
 
 export const SYNLIGE_MAAL = 3;

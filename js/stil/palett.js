@@ -45,3 +45,35 @@ export const FIGUR = {
   malm: ['#d98a4a', '#b8c3cf'],
   skygge: 'rgba(20, 25, 15, 0.22)',
 };
+
+/** Bunnfarger per biom (verden 2, 3, 4 …). Det som mangler, hentes fra det grønne landet. */
+export const BIOM_BUNN = {
+  temperert: BUNN,
+  orken: {
+    ...BUNN,
+    eng:    { midt: '#e3c98a', kant: '#b89a5c', flak: ['#ecd79e', '#d2b673'], tust: '#9aa35a' },
+    skog:   { midt: '#dcbf80', kant: '#b0925a', flak: ['#e8d39a', '#c9ab6c'], tust: '#8a9450' },
+    aas:    { midt: '#c98f5e', kant: '#9a6a42', flak: ['#d6a272', '#b07a4c'], tust: null },
+    fjell:  { midt: '#b08066', kant: '#7d5846', flak: ['#c2937a', '#966a54'], tust: null },
+    vann:   { midt: '#3fa7b8', kant: '#2a7487', flak: ['#5cbccc', '#2f8c9e'], tust: null },
+    strand: { midt: '#f0dfae', kant: '#c9b37c', flak: ['#f7ebc4', '#dcc993'], tust: null },
+  },
+  sno: {
+    ...BUNN,
+    eng:    { midt: '#e9eff3', kant: '#b8c6d1', flak: ['#ffffff', '#d5dfe6'], tust: '#9fb1bd' },
+    skog:   { midt: '#dfe7ed', kant: '#aebcc7', flak: ['#f4f8fb', '#c8d4dd'], tust: '#93a6b3' },
+    aas:    { midt: '#cfd8de', kant: '#9eacb6', flak: ['#e4ebef', '#b8c4cc'], tust: null },
+    fjell:  { midt: '#a9b6c4', kant: '#6f7d8c', flak: ['#c2cdd8', '#8d9aa8'], tust: null },
+    vann:   { midt: '#7fb6d6', kant: '#4d84a6', flak: ['#d8ecf7', '#a6cfe4'], tust: null },
+    strand: { midt: '#dfe6ea', kant: '#b3c0c8', flak: ['#eef2f5', '#c9d3d9'], tust: null },
+  },
+  jungel: {
+    ...BUNN,
+    eng:    { midt: '#5f9a3e', kant: '#3f6a2a', flak: ['#72b04c', '#4f8634'], tust: '#2f5520' },
+    skog:   { midt: '#4f8a36', kant: '#335c23', flak: ['#62a044', '#3f7329'], tust: '#26461a' },
+    aas:    { midt: '#8a8a4e', kant: '#5e5e33', flak: ['#9c9c5e', '#727240'], tust: '#4a5a2a' },
+    fjell:  { midt: '#6b7a6a', kant: '#465246', flak: ['#7d8c7c', '#586657'], tust: null },
+    vann:   { midt: '#3a9bb0', kant: '#246a7d', flak: ['#55b2c6', '#2c8094'], tust: null },
+    strand: { midt: '#ecdba3', kant: '#c4ad74', flak: ['#f5e8bd', '#d8c48c'], tust: null },
+  },
+};

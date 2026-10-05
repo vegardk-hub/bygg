@@ -81,6 +81,12 @@ export const BYGG = {
     kost: { tre: 8, stein: 4, jern: 2, mynter: 10 },
     tekst: 'Sager tømmer fra hogstbuene rundt. +3 tre for hver hogstbu ved siden av.',
   },
+  havn: {
+    navn: 'Havn', ikon: '⚓', paa: [T.STRAND, T.GRESS], kanBygges: true,
+    krav: { naboTerreng: T.VANN, tekst: 'Må stå ved vann.' },
+    kost: { tre: 20, stein: 10, mynter: 25 },
+    tekst: 'Her kan du bygge skip og seile til andre verdener.',
+  },
   molle: {
     navn: 'Mølle', ikon: '🌬️', paa: [T.GRESS], kanBygges: true,
     ravare: 'korn', grunn: 0, nabo: { bygg: 'gard', pr: 3 },
@@ -158,4 +164,38 @@ export const MARKED = {
   fallPerVare: 0.97,
   minFaktor: 0.4,
   gjenopprettingPerDag: 0.25, // andel av avstanden opp til full pris som hentes inn hver natt
+};
+
+// ---------------------------------------------------------------------------
+// Fase 4: skip, seiling og flere verdener
+// ---------------------------------------------------------------------------
+
+/** Skipet. Lasterommet (antall råvarer) vokser med nivå. */
+export const SKIP = {
+  kost: { tre: 30, jern: 4, mynter: 40 },
+  lasterom: { 1: 60, 2: 120, 3: 200 },
+  oppgrader: { 2: { tre: 40, jern: 8, mynter: 80 }, 3: { tre: 60, jern: 15, mynter: 150 } },
+  maksNivaa: 3,
+  lastSteg: 10,
+};
+
+/**
+ * Seiling. Første reise til en ukjent verden krever at bosetningen er kommet i gang.
+ * Hver ny verden er litt større og har nytt landskap. Kartstjerner (én per ny verden)
+ * gjør avdekking billigere for alltid.
+ */
+export const REISE = {
+  krevKobletLandsbyer: 2,
+  dager: 1,
+  forsteStorrelse: 32, storrelseVekst: 4, maksStorrelse: 48,
+  biomer: ['orken', 'sno', 'jungel'], // rekkefølgen for verden 2, 3, 4, …
+  kartstjerneRabatt: 0.9, minstePrisFaktor: 0.5,
+  lagerTakBorte: 100, // råvarer en verden kan samle opp mens du er et annet sted
+};
+
+export const BIOM = {
+  temperert: { navn: 'Grønt land', ikon: '🌲' },
+  orken: { navn: 'Ørken', ikon: '🏜️' },
+  sno: { navn: 'Snøland', ikon: '❄️' },
+  jungel: { navn: 'Jungel', ikon: '🌴' },
 };

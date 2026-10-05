@@ -10,6 +10,7 @@ import {
   treveierINettet, oppgraderVei, steinKostFor, giMat, selgIMarked, landsby, markedsverdi, leverOppdrag,
 } from '../js/spill.js';
 import { tilData, fraData } from '../js/lagring.js';
+import * as Spill from '../js/spill.js';
 import { BYGG } from '../js/data/balanse.js';
 
 const seed = Number(process.argv[2] ?? 2026);
@@ -110,6 +111,71 @@ const DAGER = Number(process.argv[3] ?? 60);
   const fersk = nyttSpill(seed, 32);
   assert.equal(byggVei(fersk.spill, fersk.verden, 0)[0].type, 'feil');
   console.log(`✓ vei- og handelstester ok (rute ${forStein} → ${handelsruter(spill, verden)[0].mynter} 🪙/dag med stein)`);
+}
+
+// ---------------------------------------------------------------------------
+// 1c. Havn, skip og flere verdener
+// ---------------------------------------------------------------------------
+{
+  const { spill, verden } = Spill.nyttSpill(seed, 32);
+  spill.avdekket.fill(1);
+  spill.lager = { mynter: 9999, tre: 999, stein: 999, korn: 999, fisk: 999, kjott: 999, jern: 999 };
+  // Havn ved vann
+  const B = verden.bredde;
+  const havnRute = [...Array(B * B).keys()].find((i) => Spill.muligeBygg(spill, verden, i).includes('havn'));
+  assert.ok(havnRute !== undefined, 'fant plass til havn');
+  Spill.bygg(spill, verden, havnRute, 'havn');
+  assert.equal(Spill.seil(spill, verden, 'ny')[0].type, 'feil', 'uten skip kan man ikke seile');
+  Spill.byggSkip(spill);
+  assert.ok(Spill.skipHer(spill));
+  // Krav: to landsbyer koblet
+  assert.equal(Spill.kanOppdage(spill, verden).ok, false);
+  const landsbyer = [...verden.landsbynavn.keys()];
+  let koblet = 0;
+  for (const l of landsbyer) {
+    if (koblet >= 2) break;
+    const h = Spill.byggVeiTilLeiren(spill, verden, l);
+    if (h.some((e) => e.type === 'vei')) koblet++;
+  }
+  assert.ok(Spill.kanOppdage(spill, verden).ok, 'to landsbyer koblet');
+  // Last og seil
+  Spill.lastSkip(spill, 'tre', 50);
+  Spill.lastSkip(spill, 'jern', 30); // bare 10 får plass (lasterom 60)
+  assert.equal(Spill.lastSum(spill), 60);
+  const hjemNavn = spill.navn, hjemTre = spill.lager.tre;
+  const dag = spill.dag;
+  const h = Spill.seil(spill, verden, 'ny');
+  assert.equal(h[0].type, 'seilt');
+  assert.equal(spill.aktiv, 1);
+  assert.equal(spill.dag, dag + 1, 'reisen tar en dag');
+  assert.notEqual(spill.navn, hjemNavn);
+  assert.equal(spill.lager.tre, 50, 'lasten er losset i den nye verdenen');
+  assert.equal(spill.lager.jern, 10);
+  assert.ok(spill.lager.mynter > 0, 'myntene følger med');
+  assert.ok([...spill.bygg.values()].some((b) => b.type === 'havn'), 'ny verden har havn');
+  const v2 = Spill.lagVerden(spill);
+  assert.equal(v2.bredde, 36, 'ny verden er større');
+  assert.equal(Spill.kartstjerner(spill), 1);
+  // Den gamle verdenen produserer mens vi er borte
+  const for_ = spill.verdener[0].lager.tre;
+  Spill.nyDag(spill, v2);
+  assert.ok(spill.verdener[0].lager.tre >= for_, 'taket tar aldri bort noe (hjemme var det over 100)');
+  spill.verdener[0].lager.korn = 10;
+  Spill.nyDag(spill, v2);
+  assert.ok(spill.verdener[0].lager.korn > 10, 'hjemøya (leiren) produserer videre under taket');
+  // Lagring fram og tilbake med to verdener
+  const kopi = fraData(JSON.parse(JSON.stringify(tilData(spill))));
+  assert.equal(kopi.verdener.length, 2);
+  assert.equal(kopi.verdener[1], null);
+  assert.equal(kopi.verdener[0].navn, hjemNavn);
+  assert.deepEqual(kopi.skip, spill.skip);
+  // Seil hjem igjen
+  Spill.lastSkip(spill, 'tre', 20);
+  Spill.seil(spill, v2, 0);
+  assert.equal(spill.aktiv, 0);
+  assert.equal(spill.navn, hjemNavn);
+  assert.ok(spill.lager.tre >= hjemTre - 50 + 20, 'hjemlageret er tilbake, med lasten');
+  console.log(`✓ skip- og verdenstester ok (${hjemNavn} ↔ ${kopi.navn})`);
 }
 
 // ---------------------------------------------------------------------------

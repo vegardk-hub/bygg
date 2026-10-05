@@ -160,7 +160,7 @@ All tallbalanse samles i én fil (`data/balanse.js`) så det er lett å justere.
 | 1 ✅ | Kjerne: tåke, avdekke, 3 råvarer (tre, stein, korn), 3 bygg, mynter, lagring | 10 min spill uten feil og med lyst på mer |
 | 2 ✅ | Landsbyer, veier (tre → stein), handelsruter, marked | Veibygging føles lønnsomt |
 | 3 ✅ | Alle råvarer, dyr, fisk, jern, nabobonuser, oppdrag | Variert midtspill |
-| 4 | Havn, skip, ny verden, havkart, seiling fram og tilbake, lager i gamle verdener, kartstjerner, nye biomer | Det er morsomt å seile tilbake og hente last |
+| 4 ✅ | Havn, skip, ny verden, havkart, seiling fram og tilbake, lager i gamle verdener, kartstjerner, nye biomer | Det er morsomt å seile tilbake og hente last |
 | 5 | Hendelser, lyd, juice, PWA-polish, iPad-test, balansering | Klar for familien |
 
 ---
@@ -247,3 +247,13 @@ mørkere kanter, svart bakgrunn `#010101`, klammer `#faf2db`). All grafikk er te
 - Oppdrag: landsbyer koblet til leiren ber om én vare; belønning 1,5 × markedspris + mat; én dags pause mellom oppdrag.
 - Lagring versjon 3 (migrering legger til nye varer). 9 nye mål.
 - Testet: regeltester og robot i Node, røyktest av tegning i nettleseren (etter ønske: ingen full brukertest).
+
+## Status fase 4 (2026-10-05)
+- Flere verdener: den aktive verdenen ligger rett på `spill` (alle regler virker som før), de andre som øyeblikksbilder i `spill.verdener`.
+  Mynter, dag, mål og statistikk er felles; råvarer hører til hver verden.
+- Havn (strand/eng ved vann), skip (lasterom 60/120/200), last av og på i havnepanelet, havkart med øyene og «Ukjent hav».
+- Første reise ut krever 2 landsbyer koblet til leiren. Reisen tar én dag. Nye verdener: 36×36, 40×40 … (maks 48), biom ørken → snø → jungel,
+  egen havn ved ankomst, eget navn (f.eks. Solstranda). Kartstjerne per ny verden: avdekking 10 % billigere (minst halv pris).
+- Verdener du ikke er i produserer til eget lager (tak 100 per vare – taket tar aldri bort noe), handel der gir mynter.
+- Biomer: egne bunnfarger, kaktus/snøgran/palme. Lagring versjon 4 med migrering. 7 nye mål.
+- Testet: regeltester for skip/verdener/lagring i Node, hel seilas fram og tilbake i nettleseren.

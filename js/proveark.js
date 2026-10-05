@@ -185,6 +185,11 @@ function terrengGalleri() {
     liste.push([{ terreng: t, overlegg: o }, NAVN[o]]);
   }
   liste.push([{ ukjent: true }, 'Kan avdekkes']);
+  const biomNavn = { orken: 'Ørken', sno: 'Snø', jungel: 'Jungel' };
+  for (const biom of Object.keys(biomNavn)) {
+    for (const t of TERRENGTYPER) liste.push([{ terreng: t, biom }, `${biomNavn[biom]}: ${NAVN[t]}`]);
+    liste.push([{ terreng: 'strand', bygg: 'havn', biom }, `${biomNavn[biom]}: Havn`]);
+  }
   return liste;
 }
 

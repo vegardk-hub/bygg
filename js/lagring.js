@@ -12,23 +12,51 @@ const MIGRERINGER = {
   1: (d) => ({ ...d, versjon: 2, veier: [], landsbyer: [], flytt: [] }),
   // Versjon 3 (fase 3): fisk, kjøtt og jern i lageret.
   2: (d) => ({ ...d, versjon: 3, lager: { fisk: 0, kjott: 0, jern: 0, ...d.lager } }),
+  // Versjon 4 (fase 4): flere verdener og skip. Den gamle verdenen blir verden nr. 0.
+  3: (d) => ({ ...d, versjon: 4, biom: 'temperert', navn: 'Hjemøya', rotSeed: d.seed, aktiv: 0, verdener: [null], skip: null }),
 };
+
+/** Én verden (feltene i VERDENSFELT + lager) som ren data. */
+function verdenTilData(w) {
+  return {
+    seed: w.seed, str: w.str, biom: w.biom, navn: w.navn,
+    avdekket: bitsTilTekst(w.avdekket),
+    bygg: [...w.bygg].map(([i, b]) => [i, b.type, b.nivaa]),
+    brukt: [...w.brukt],
+    veier: [...w.veier],
+    flytt: w.flytt.map((f) => [...f]),
+    landsbyer: [...w.landsbyer].map(([i, l]) => [i, { ...l, priser: { ...l.priser }, oppdrag: l.oppdrag ? { ...l.oppdrag } : null }]),
+    lager: { ...w.lager },
+  };
+}
+
+function verdenFraData(d) {
+  return {
+    seed: d.seed, str: d.str, biom: d.biom ?? 'temperert', navn: d.navn ?? 'Hjemøya',
+    avdekket: tekstTilBits(d.avdekket, d.str * d.str),
+    bygg: new Map(d.bygg.map(([i, type, nivaa]) => [i, { type, nivaa }])),
+    brukt: new Set(d.brukt),
+    veier: new Map(d.veier ?? []),
+    flytt: d.flytt ?? [],
+    landsbyer: new Map(d.landsbyer ?? []),
+    lager: d.lager,
+  };
+}
 
 export function tilData(spill) {
   return {
     versjon: SPILL_VERSJON,
-    seed: spill.seed,
-    str: spill.str,
-    dag: spill.dag,
+    // Verdenen du er i ligger øverst (som i eldre versjoner) …
+    ...verdenTilData(spill),
     lager: { ...spill.lager },
-    avdekket: bitsTilTekst(spill.avdekket),
-    bygg: [...spill.bygg].map(([i, b]) => [i, b.type, b.nivaa]),
-    brukt: [...spill.brukt],
+    // … resten er felles, og de andre verdenene ligger i `verdener` (null = den aktive).
+    rotSeed: spill.rotSeed,
+    dag: spill.dag,
     maalFerdig: [...spill.maalFerdig],
     stat: { ...spill.stat },
-    veier: [...spill.veier],
-    flytt: spill.flytt.map((f) => [...f]),
-    landsbyer: [...spill.landsbyer].map(([i, l]) => [i, { ...l, priser: { ...l.priser } }]),
+    aktiv: spill.aktiv,
+    verdener: spill.verdener.map((w) => (w ? verdenTilData(w) : null)),
+    skip: spill.skip ? { ...spill.skip, last: { ...spill.skip.last } } : null,
     lagret: Date.now(),
   };
 }
@@ -43,18 +71,15 @@ export function fraData(data) {
   if (d.versjon > SPILL_VERSJON) throw new Error('Lagringen er fra en nyere versjon av spillet.');
   return {
     versjon: d.versjon,
-    seed: d.seed,
-    str: d.str,
-    dag: d.dag,
+    ...verdenFraData(d),
     lager: d.lager,
-    avdekket: tekstTilBits(d.avdekket, d.str * d.str),
-    bygg: new Map(d.bygg.map(([i, type, nivaa]) => [i, { type, nivaa }])),
-    brukt: new Set(d.brukt),
+    rotSeed: d.rotSeed,
+    dag: d.dag,
     maalFerdig: new Set(d.maalFerdig),
     stat: { ...TOM_STAT, ...d.stat },
-    veier: new Map(d.veier),
-    flytt: d.flytt ?? [],
-    landsbyer: new Map(d.landsbyer),
+    aktiv: d.aktiv,
+    verdener: d.verdener.map((w) => (w ? verdenFraData(w) : null)),
+    skip: d.skip,
   };
 }
 

@@ -9,7 +9,7 @@ import { navngiLandsbyer } from './navn.js';
 import { T, START } from './data/terreng.js';
 import {
   START_LAGER, AVDEKK, BYGG, BYGG_KOSTVEKST, NIVAA, OPPGRADER_KOSTVEKST, MAKS_NIVAA, PRIS, FUNN,
-  RAVARE_REKKEFOLGE, VEI, LANDSBY, MARKED, OPPDRAG,
+  RAVARE_REKKEFOLGE, VEI, LANDSBY, MARKED, OPPDRAG, SKIP, REISE, BIOM,
 } from './data/balanse.js';
 import { MAAL, SYNLIGE_MAAL } from './data/maal.js';
 import {
@@ -17,53 +17,138 @@ import {
 } from './veinett.js';
 import { blandSeed, lagTilfeldig } from './rng.js';
 
-export const SPILL_VERSJON = 3;
+export const SPILL_VERSJON = 4;
 
 /** Statistikk-feltene. Nye felt får 0 når en gammel lagring lastes. */
 export const TOM_STAT = {
   avdekket: 0, bygget: 0, oppgradert: 0, solgt: 0, skatter: 0, landsbyer: 0, tjent: 0, dager: 0, gardNabo: 0,
   veier: 0, broer: 0, steinveier: 0, handel: 0, matLevert: 0, kobletLandsbyer: 0, storsteLandsby: 1,
   oppdrag: 0, matTyper: 0, // matTyper: bitmaske over hvilke matvarer som er gitt (korn 1, fisk 2, kjøtt 4)
+  reiser: 0, verdener: 1, fraktet: 0,
 };
 
 // ---------------------------------------------------------------------------
-// Oppstart
+// Oppstart og verdener
 // ---------------------------------------------------------------------------
-export function nyttSpill(seed, str = 32) {
-  const verden = lagVerden({ seed, str });
-  const spill = {
-    versjon: SPILL_VERSJON,
-    seed, str,
-    dag: 1,
-    lager: { ...START_LAGER },
+//
+// Spillet kan ha flere verdener (øyer). Den du er i nå, ligger rett på `spill`
+// (seed, str, avdekket, bygg, veier … og råvarene i spill.lager), så alle
+// regelfunksjonene virker som før. De andre ligger som øyeblikksbilder i
+// spill.verdener[k] (plassen til den aktive er null). Mynter, dag, mål og
+// statistikk er felles for alle verdener.
+
+/** Feltene som hører til én verden (resten av `spill` er felles). */
+export const VERDENSFELT = ['seed', 'str', 'biom', 'navn', 'avdekket', 'bygg', 'brukt', 'veier', 'landsbyer', 'flytt'];
+
+const VERDENSNAVN = {
+  temperert: [['Grønn', 'Lyng', 'Bjørke', 'Eike', 'Kløver'], ['øya', 'holmen', 'landet']],
+  orken: [['Sand', 'Sol', 'Gull', 'Kaktus', 'Dyne'], ['øya', 'landet', 'stranda']],
+  sno: [['Is', 'Snø', 'Frost', 'Kvit', 'Nordlys'], ['øya', 'holmen', 'landet']],
+  jungel: [['Palme', 'Papegøye', 'Frukt', 'Lian', 'Kokos'], ['øya', 'holmen', 'landet']],
+};
+
+function verdensnavn(seed, biom) {
+  const tilf = lagTilfeldig(blandSeed(seed, 'verdensnavn'));
+  const [for_, etter] = VERDENSNAVN[biom];
+  return tilf.velg(for_) + tilf.velg(etter);
+}
+
+/** Lager en helt ny verden: avdekket startområde, leiren, og (for nye øyer) en havn ved vannet. */
+function lagVerdensTilstand(seed, str, biom, medHavn) {
+  const verden = lagVerden({ seed, str, biom, flytt: [] }, { ny: true });
+  const w = {
+    seed, str, biom, navn: verdensnavn(seed, biom),
     avdekket: new Uint8Array(str * str),
     bygg: new Map(),
     brukt: new Set(),         // skatter og bærbusker som er hentet
-    maalFerdig: new Set(),
     veier: new Map(),         // rute → 'tre' | 'stein'
+    landsbyer: new Map(),     // rute → { str, mat, priser, oppdrag … } for landsbyer man har funnet
     flytt: [],                // [fra, til] for dyr som har flyttet seg (til = -1: gått inn i skogen)
-    landsbyer: new Map(),     // rute → { str, mat, priser: { vare: faktor } } for landsbyer man har funnet
-    stat: { ...TOM_STAT },
+    lager: {},                // råvarene i denne verdenen (mynter er felles)
   };
   const r = START.avdekketRadius;
   for (let dy = -r; dy <= r; dy++) {
     for (let dx = -r; dx <= r; dx++) {
       const x = verden.start.x + dx, y = verden.start.y + dy;
-      if (x >= 0 && y >= 0 && x < str && y < str) spill.avdekket[y * str + x] = 1;
+      if (x >= 0 && y >= 0 && x < str && y < str) w.avdekket[y * str + x] = 1;
     }
   }
-  spill.bygg.set(verden.start.y * str + verden.start.x, { type: 'leir', nivaa: 1 });
+  const startI = verden.start.y * str + verden.start.x;
+  w.bygg.set(startI, { type: 'leir', nivaa: 1 });
+  if (medHavn) {
+    // Skipet trenger en havn å legge til ved: nærmeste ledige land ved vann rundt leiren.
+    let best = -1, bestAvst = Infinity;
+    for (let i = 0; i < str * str; i++) {
+      const t = verden.terreng[i];
+      if ((t !== T.STRAND && t !== T.GRESS) || i === startI || verden.overlegg.has(i)) continue;
+      if (!naboer(verden, i).some((j) => verden.terreng[j] === T.VANN)) continue;
+      const d = Math.hypot((i % str) - verden.start.x, Math.floor(i / str) - verden.start.y);
+      if (d < bestAvst) { bestAvst = d; best = i; }
+    }
+    if (best >= 0) {
+      w.bygg.set(best, { type: 'havn', nivaa: 1 });
+      w.avdekket[best] = 1;
+    }
+  }
+  return { w, verden };
+}
+
+export function nyttSpill(seed, str = 32) {
+  const { w, verden } = lagVerdensTilstand(seed, str, 'temperert', false);
+  const spill = {
+    versjon: SPILL_VERSJON,
+    rotSeed: seed,             // nye verdener får seed avledet av denne
+    dag: 1,
+    maalFerdig: new Set(),
+    stat: { ...TOM_STAT },
+    aktiv: 0,
+    verdener: [null],
+    skip: null,                // { nivaa, plass (verden), last: { vare: n } }
+    ...w,
+    lager: { ...START_LAGER },
+  };
   return { spill, verden };
 }
 
-/** Genererer verdenen et spill hører til (samme seed → samme kart). */
-export function lagVerden(spill) {
-  const verden = genererVerden(spill.seed, { bredde: spill.str, hoyde: spill.str });
+// Genererte kart gjenbrukes (det tar noen millisekunder å lage dem).
+const verdenLager = new Map();
+
+/** Kartet til en verden (samme seed → samme kart). `ny`: lag på nytt i stedet for å gjenbruke. */
+export function lagVerden(w, { ny = false } = {}) {
+  const nokkel = `${w.seed}:${w.str}`;
+  if (!ny && verdenLager.has(nokkel)) return verdenLager.get(nokkel);
+  const verden = genererVerden(w.seed, { bredde: w.str, hoyde: w.str });
   verden.landsbynavn = navngiLandsbyer(verden);
+  verden.biom = w.biom ?? 'temperert';
   // Dyr som har flyttet seg, flyttes på nytt i samme rekkefølge.
-  for (const [fra, til] of spill.flytt ?? []) flyttOverlegg(verden, fra, til);
+  for (const [fra, til] of w.flytt ?? []) flyttOverlegg(verden, fra, til);
+  verdenLager.set(nokkel, verden);
   return verden;
 }
+
+/** Øyeblikksbilde av verdenen du er i (råvarer uten mynter). */
+function taUtVerden(spill) {
+  const w = {};
+  for (const f of VERDENSFELT) w[f] = spill[f];
+  const { mynter, ...lager } = spill.lager;
+  w.lager = lager;
+  return w;
+}
+
+function settInnVerden(spill, w) {
+  for (const f of VERDENSFELT) spill[f] = w[f];
+  spill.lager = { ...Object.fromEntries(RAVARE_REKKEFOLGE.map((r) => [r, 0])), ...w.lager, mynter: spill.lager.mynter };
+}
+
+/** Alle verdener som liste med navn og biom (den aktive tas fra spill). */
+export function alleVerdener(spill) {
+  return spill.verdener.map((w, k) => {
+    const v = k === spill.aktiv ? taUtVerden(spill) : w;
+    return { nr: k, navn: v.navn, biom: v.biom, str: v.str, lager: v.lager, aktiv: k === spill.aktiv, harHavn: [...v.bygg.values()].some((b) => b.type === 'havn') };
+  });
+}
+
+export const kartstjerner = (spill) => spill.verdener.length - 1;
 
 function flyttOverlegg(verden, fra, til) {
   const o = verden.overlegg.get(fra);
@@ -115,7 +200,9 @@ export function kanAvdekkes(spill, verden, i) {
 
 /** Prisen for neste rute (land eller vann), uavhengig av hvilken rute det er. */
 export function avdekkPris(spill, vann = false) {
-  const pris = AVDEKK.grunn * AVDEKK.vekst ** spill.stat.avdekket;
+  // Kartstjerner (én per verden du har oppdaget) gjør avdekking billigere.
+  const rabatt = Math.max(REISE.minstePrisFaktor, REISE.kartstjerneRabatt ** kartstjerner(spill));
+  const pris = AVDEKK.grunn * AVDEKK.vekst ** spill.stat.avdekket * rabatt;
   return Math.max(1, Math.round(pris * (vann ? AVDEKK.vannFaktor : 1)));
 }
 
@@ -238,6 +325,7 @@ export function produksjon(spill, verden, i, type = spill.bygg.get(i)?.type, niv
   const def = BYGG[type];
   if (!def) return null;
   if (type === 'leir') return { gave: { ...def.gir }, forklaring: '' };
+  if (!def.ravare) return { gave: {}, forklaring: '' };
   let bonus = 0;
   for (const j of naboer(verden, i)) {
     if (def.nabo.terreng?.includes(verden.terreng[j])) bonus += def.nabo.pr;
@@ -283,9 +371,137 @@ export function nyDag(spill, verden) {
       hendelser.push({ type: 'oppdrag', i, tekst: `📜 ${verden.landsbynavn.get(i)} har et nytt oppdrag!` });
     }
   }
+  // De andre verdenene produserer videre til sitt eget lager mens du er borte.
+  spill.verdener.forEach((w, k) => {
+    if (w && k !== spill.aktiv) hendelser.push(produserBorte(spill, w));
+  });
   spill.dag++;
   spill.stat.dager++;
   return [{ type: 'nyDag', dag: spill.dag }, ...hendelser].concat(sjekkMaal(spill));
+}
+
+/** Produksjon i en verden du ikke er i: råvarer til dens lager (med tak), handel gir mynter til deg. */
+function produserBorte(spill, w) {
+  const verden = lagVerden(w);
+  const vis = { ...w, stat: { ...TOM_STAT } }; // regelfunksjonene trenger et «spill» å se på
+  const sum = {};
+  for (const i of w.bygg.keys()) {
+    for (const [r, n] of Object.entries(produksjon(vis, verden, i).gave)) {
+      if (r === 'mynter') { gi(spill, { mynter: n }); continue; }
+      const for_ = w.lager[r] || 0;
+      // Taket stopper bare videre oppsamling – det tar aldri bort noe man allerede har.
+      w.lager[r] = for_ >= REISE.lagerTakBorte ? for_ : Math.min(REISE.lagerTakBorte, for_ + n);
+      sum[r] = (sum[r] || 0) + (w.lager[r] - for_);
+    }
+  }
+  let handel = 0;
+  for (const rute of handelsruter(vis, verden)) handel += rute.mynter;
+  if (handel) { gi(spill, { mynter: handel }); spill.stat.handel += handel; }
+  return { type: 'borte', navn: w.navn, gave: sum, mynter: handel };
+}
+
+// ---------------------------------------------------------------------------
+// Skip og seiling
+// ---------------------------------------------------------------------------
+export const harHavn = (spill) => [...spill.bygg.values()].some((b) => b.type === 'havn');
+export const lasterom = (spill) => (spill.skip ? SKIP.lasterom[spill.skip.nivaa] : 0);
+export const lastSum = (spill) => Object.values(spill.skip?.last ?? {}).reduce((a, n) => a + n, 0);
+export const skipHer = (spill) => spill.skip && spill.skip.plass === spill.aktiv;
+
+export function byggSkip(spill) {
+  if (spill.skip) return [{ type: 'feil', tekst: 'Du har allerede et skip.' }];
+  if (!harHavn(spill)) return [{ type: 'feil', tekst: 'Bygg en havn først.' }];
+  if (!harRad(spill, SKIP.kost)) return [{ type: 'feil', tekst: 'Du har ikke nok til skipet.', mangler: SKIP.kost }];
+  trekk(spill, SKIP.kost);
+  spill.skip = { nivaa: 1, plass: spill.aktiv, last: {} };
+  return [{ type: 'skip', tekst: '⛵ Skipet ligger klart i havna!' }].concat(sjekkMaal(spill));
+}
+
+export function oppgraderSkipKost(spill) {
+  if (!spill.skip || spill.skip.nivaa >= SKIP.maksNivaa) return null;
+  return { ...SKIP.oppgrader[spill.skip.nivaa + 1] };
+}
+
+export function oppgraderSkip(spill) {
+  const kost = oppgraderSkipKost(spill);
+  if (!kost) return [{ type: 'feil', tekst: 'Skipet kan ikke bli større.' }];
+  if (!skipHer(spill)) return [{ type: 'feil', tekst: 'Skipet er ikke her.' }];
+  if (!harRad(spill, kost)) return [{ type: 'feil', tekst: 'Du har ikke nok.', mangler: kost }];
+  trekk(spill, kost);
+  spill.skip.nivaa++;
+  return [{ type: 'skip', tekst: `⛵ Skipet er større! Lasterom: ${lasterom(spill)}` }].concat(sjekkMaal(spill));
+}
+
+/** Flytter n av en vare mellom lageret og skipet (n > 0: last på, n < 0: ta av). */
+export function lastSkip(spill, vare, n) {
+  if (!skipHer(spill)) return [{ type: 'feil', tekst: 'Skipet er ikke her.' }];
+  const last = spill.skip.last;
+  if (n > 0) n = Math.min(n, spill.lager[vare] || 0, lasterom(spill) - lastSum(spill));
+  else n = -Math.min(-n, last[vare] || 0);
+  if (!n) return [{ type: 'feil', tekst: n === 0 && lastSum(spill) >= lasterom(spill) ? 'Skipet er fullt.' : 'Ingenting å flytte.' }];
+  spill.lager[vare] -= n;
+  last[vare] = (last[vare] || 0) + n;
+  if (!last[vare]) delete last[vare];
+  return [{ type: 'last', vare, n }];
+}
+
+/** Kan du seile til en ukjent verden nå? Returnerer en forklaring hvis ikke. */
+export function kanOppdage(spill, verden) {
+  let koblet = 0;
+  for (const i of verden.landsbynavn.keys()) if (spill.avdekket[i] && kobletTilLeiren(spill, verden, i)) koblet++;
+  if (koblet < REISE.krevKobletLandsbyer) {
+    return { ok: false, tekst: `Koble minst ${REISE.krevKobletLandsbyer} landsbyer til leiren med vei før du seiler ut på ukjent hav (nå: ${koblet}).` };
+  }
+  return { ok: true };
+}
+
+/**
+ * Seil til verden nr `mal` (eller 'ny' for å oppdage en ny). Reisen tar en dag – alle
+ * verdener produserer – og lasten losses i havna du kommer til. Etterpå er `spill`
+ * den nye verdenen; kalleren må hente kartet på nytt med lagVerden(spill).
+ */
+export function seil(spill, verden, mal) {
+  if (!spill.skip) return [{ type: 'feil', tekst: 'Du trenger et skip. Bygg det i havna.' }];
+  if (!skipHer(spill)) return [{ type: 'feil', tekst: 'Skipet ligger i en annen verden.' }];
+  if (!harHavn(spill)) return [{ type: 'feil', tekst: 'Du trenger en havn å seile fra.' }];
+  if (mal === spill.aktiv) return [{ type: 'feil', tekst: 'Du er allerede her!' }];
+  if (mal === 'ny') {
+    const k = kanOppdage(spill, verden);
+    if (!k.ok) return [{ type: 'feil', tekst: k.tekst }];
+  } else if (!spill.verdener[mal]) {
+    return [{ type: 'feil', tekst: 'Den verdenen finnes ikke.' }];
+  }
+  // Reisen: en dag går for alle verdener.
+  const dag = nyDag(spill, verden).filter((h) => h.type === 'maal');
+  const fraNavn = spill.navn;
+  spill.verdener[spill.aktiv] = taUtVerden(spill);
+  let nr = mal, ny = false;
+  if (mal === 'ny') {
+    nr = spill.verdener.length;
+    const str = Math.min(REISE.maksStorrelse, REISE.forsteStorrelse + REISE.storrelseVekst * nr);
+    const biom = REISE.biomer[(nr - 1) % REISE.biomer.length];
+    const { w } = lagVerdensTilstand(blandSeed(spill.rotSeed, 'verden', nr) % 1_000_000, str, biom, true);
+    spill.verdener.push(w);
+    spill.stat.verdener++;
+    ny = true;
+  }
+  const w = spill.verdener[nr];
+  spill.verdener[nr] = null;
+  spill.aktiv = nr;
+  settInnVerden(spill, w);
+  // Loss lasten i den nye havna.
+  const last = spill.skip.last;
+  for (const [vare, n] of Object.entries(last)) {
+    spill.lager[vare] = (spill.lager[vare] || 0) + n;
+    spill.stat.fraktet += n;
+  }
+  spill.skip.last = {};
+  spill.skip.plass = nr;
+  spill.stat.reiser++;
+  const tekst = ny
+    ? `⛵ Du har oppdaget ${spill.navn}! ${BIOM[spill.biom].ikon} En ny kartstjerne gjør utforsking billigere.`
+    : `⛵ Velkommen tilbake til ${spill.navn}!`;
+  return [{ type: 'seilt', fra: fraNavn, til: spill.navn, ny, last, tekst }, ...dag].concat(sjekkMaal(spill));
 }
 
 // ---------------------------------------------------------------------------

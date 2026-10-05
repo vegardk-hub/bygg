@@ -36,7 +36,7 @@ const AVDEKK_MS = 420;
 async function start() {
   const lagret = hent();
   if (lagret) {
-    lastInn(lagret, S.lagVerden(lagret));
+    lastInn(lagret, S.lagVerden(lagret, { ny: true }));
   } else {
     const { spill, verden } = S.nyttSpill(Math.floor(Math.random() * 1_000_000), 32);
     lastInn(spill, verden);
@@ -124,12 +124,54 @@ function visPanel() {
     veiHit: () => behandle(S.byggVeiTilLeiren(spill, verden, t.valgt)),
     mat: (vare) => behandle(S.giMat(spill, verden, t.valgt, vare)),
     oppdrag: () => behandle(S.leverOppdrag(spill, verden, t.valgt)),
+    skip: () => behandle(S.byggSkip(spill)),
+    skipOpp: () => behandle(S.oppgraderSkip(spill)),
+    last: (vare, n) => behandle(S.lastSkip(spill, vare, n)),
+    havkart: aapneHavkart,
     marked: (vare, n) => behandle(S.selgIMarked(spill, verden, t.valgt, vare, n)),
   });
 }
 
 function nyDag() {
   behandle(S.nyDag(t.spill, t.verden));
+}
+
+// ---------------------------------------------------------------------------
+// Havkart og seiling
+// ---------------------------------------------------------------------------
+function aapneHavkart() {
+  P.visHavkart(t.spill, t.verden, { seil });
+  if (!$('havkart').open) $('havkart').showModal();
+}
+
+function seil(mal) {
+  const h = S.seil(t.spill, t.verden, mal);
+  if (h[0].type === 'feil') { behandle(h); return; }
+  $('havkart').close();
+  $('meny').close();
+  // Liten seilas på skjermen mens vi bytter verden.
+  $('seiling-tekst').textContent = h[0].ny ? 'Seiler ut på ukjent hav …' : `Seiler til ${h[0].til} …`;
+  $('seiling').hidden = false;
+  lyd('dag');
+  setTimeout(() => {
+    t.verden = S.lagVerden(t.spill);
+    t.brett = new Brett(t.verden);
+    t.valgt = null;
+    t.avdekkAnim.clear();
+    P.skjulRutepanel();
+    kamera.grenser = { bredde: t.verden.bredde * RUTE, hoyde: t.verden.hoyde * RUTE };
+    tilHavna();
+    $('seiling').hidden = true;
+    behandle(h);
+  }, 1400);
+}
+
+function tilHavna() {
+  const havn = [...t.spill.bygg].find(([, b]) => b.type === 'havn')?.[0];
+  if (havn === undefined) return tilLeiren();
+  tilLeiren();
+  kamera.sentrer(((havn % t.verden.bredde) + 0.5) * RUTE, (Math.floor(havn / t.verden.bredde) + 0.5) * RUTE);
+  tegn();
 }
 
 function settVeimodus(paa) {
@@ -224,6 +266,22 @@ function behandle(hendelser) {
       case 'oppdrag':
         P.melding(h.tekst);
         break;
+      case 'skip':
+        P.melding(h.tekst, 'maal');
+        lyd('oppgrader');
+        break;
+      case 'last':
+        lyd('mynt');
+        break;
+      case 'seilt': {
+        const last = P.gaveTekst(h.last);
+        setTimeout(() => {
+          P.melding(h.tekst, 'maal');
+          if (last) P.melding(`Lasten er losset: ${last}`);
+          lyd(h.ny ? 'funn' : 'maal');
+        }, 200);
+        break;
+      }
       case 'oppdragFerdig': {
         const { kx, ky } = midt(h.i);
         flytendeTekst(kx, ky, `+${h.mynter} 🪙`, { farge: '#ffe27a' });
@@ -342,6 +400,8 @@ function koblKnapper() {
   $('veimodus').onclick = () => settVeimodus(!t.veimodus);
   $('lukk-panel').onclick = () => velg(null);
   $('meny-knapp').onclick = aapneMeny;
+  $('meny-havkart').onclick = () => { $('meny').close(); aapneHavkart(); };
+  $('lukk-havkart').onclick = () => $('havkart').close();
   // Mål-kortet kan klappes sammen; på smale skjermer starter det sammenklappet.
   let sammen = window.innerWidth < 1000;
   try { const v = localStorage.getItem('bygg-maal-sammen'); if (v !== null) sammen = v === '1'; } catch { /* ignorer */ }
@@ -364,7 +424,7 @@ function koblKnapper() {
   };
   // Tastatur på PC: mellomrom = ny dag, Esc = lukk panel.
   window.addEventListener('keydown', (e) => {
-    if ($('meny').open || e.target.tagName === 'TEXTAREA') return;
+    if ($('meny').open || $('havkart').open || e.target.tagName === 'TEXTAREA') return;
     if (e.code === 'Space') { e.preventDefault(); nyDag(); }
     if (e.code === 'Escape') { velg(null); settVeimodus(false); }
     if (e.code === 'KeyV') settVeimodus(!t.veimodus);
@@ -403,7 +463,7 @@ function visKodefelt(modus) {
     $('kode-ok').onclick = () => {
       try {
         const spill = lesLagrekode(kode.value);
-        lastInn(spill, S.lagVerden(spill));
+        lastInn(spill, S.lagVerden(spill, { ny: true }));
         $('meny').close();
         P.melding('Spillet er lastet inn!');
       } catch {

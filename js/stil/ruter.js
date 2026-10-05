@@ -2,7 +2,7 @@
 // gresstuster på bunnen, og low-poly-figurer oppå. Alt tegnes i en rute på
 // S × S piksler med origo i rutas øvre venstre hjørne.
 
-import { BUNN, FIGUR } from './palett.js';
+import { BUNN, FIGUR, BIOM_BUNN } from './palett.js';
 import {
   bland, lys, mork, poly, skygge, fasett, klump, kasse, hus, gran, lovtre, stein, topp, tust, iso,
 } from './lavpoly.js';
@@ -63,6 +63,69 @@ function kantskygge(ctx, S, b) {
 }
 
 // ---------------------------------------------------------------------------
+// Biom: farger og trær byttes ut i ørken, snø og jungel
+// ---------------------------------------------------------------------------
+let BA = BUNN;          // bunnfargene for biomet som tegnes nå
+let BIOM = 'temperert';
+
+/** Et tre som passer biomet (kaktus i ørkenen, snødekt gran i snølandet, palme i jungelen). */
+function biomTre(ctx, tilf, x, y, h, lov = false) {
+  switch (BIOM) {
+    case 'orken': return kaktus(ctx, tilf, x, y, h * 0.85);
+    case 'sno': return snoGran(ctx, tilf, x, y, h);
+    case 'jungel': return tilf.sjanse(0.45) ? palme(ctx, tilf, x, y, h * 1.05) : lovtre(ctx, tilf, x, y, h * 0.95, '#3f7d34');
+    default:
+      if (lov) return lovtre(ctx, tilf, x, y, h * 0.95, tilf.sjanse(0.25) ? FIGUR.lovHost : FIGUR.lov);
+      return gran(ctx, tilf, x, y, h, tilf.sjanse(0.5) ? FIGUR.gran : FIGUR.granMork);
+  }
+}
+
+function kaktus(ctx, tilf, x, y, h) {
+  skygge(ctx, x + h * 0.08, y, h * 0.22, h * 0.07);
+  const b = h * 0.16;
+  const lys = '#6fae5a', mork = '#4f8a3e';
+  poly(ctx, [[x - b / 2, y], [x - b / 2, y - h * 0.85], [x, y - h], [x, y]], lys);
+  poly(ctx, [[x, y], [x, y - h], [x + b / 2, y - h * 0.85], [x + b / 2, y]], mork);
+  // Armer
+  const arm = (side, hoyde, lengde) => {
+    const ax = x + side * b / 2, ay = y - h * hoyde;
+    poly(ctx, [[ax, ay], [ax + side * lengde, ay], [ax + side * lengde, ay - h * 0.28], [ax + side * (lengde - b * 0.7), ay - h * 0.3], [ax + side * (lengde - b * 0.7), ay - b * 0.6], [ax, ay - b * 0.6]], side < 0 ? lys : mork);
+  };
+  arm(-1, 0.42, b * 1.2);
+  if (tilf.sjanse(0.7)) arm(1, 0.55, b * 1.1);
+}
+
+function snoGran(ctx, tilf, x, y, h) {
+  gran(ctx, tilf, x, y, h, ['#5f8a6a', '#46705a']);
+  // Snø på toppen av hver etasje
+  for (let k = 0; k < 3; k++) {
+    const bunn = y - h * 0.13 - k * h * 0.22;
+    const topp = bunn - h * (0.4 - k * 0.03);
+    const halv = h * (0.3 - k * 0.07) * 0.45;
+    poly(ctx, [[x - halv, topp + h * 0.16], [x, topp], [x + halv, topp + h * 0.16], [x, topp + h * 0.12]], '#f4f7fa');
+  }
+}
+
+function palme(ctx, tilf, x, y, h) {
+  skygge(ctx, x + h * 0.12, y, h * 0.28, h * 0.08);
+  const boy = (tilf.tall() - 0.5) * h * 0.3;
+  ctx.strokeStyle = '#8a6a44';
+  ctx.lineWidth = h * 0.07;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.quadraticCurveTo(x + boy, y - h * 0.5, x + boy * 0.6, y - h * 0.82);
+  ctx.stroke();
+  const tx = x + boy * 0.6, ty = y - h * 0.82;
+  for (let k = 0; k < 6; k++) {
+    const v = -Math.PI / 2 + (k - 2.5) * 0.6;
+    const l = h * 0.38;
+    const ex = tx + Math.cos(v) * l, ey = ty + Math.sin(v) * l * 0.6 + l * 0.25;
+    poly(ctx, [[tx, ty], [(tx + ex) / 2 - Math.sin(v) * l * 0.1, (ty + ey) / 2 - h * 0.06], [ex, ey], [(tx + ex) / 2, (ty + ey) / 2 + h * 0.02]], k % 2 ? '#4f9a3a' : '#3d7f2e');
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Terreng
 // ---------------------------------------------------------------------------
 /** Spredte posisjoner i ruta, sortert bakfra (liten y) og fram. */
@@ -82,25 +145,27 @@ function plasser(tilf, S, n, marg = 0.18, minAvst = 0.2, o = {}) {
 
 const TERRENG = {
   eng(ctx, S, tilf, o) {
-    bunn(ctx, S, BUNN.eng, tilf, { flak: 12, tuster: 9 });
+    bunn(ctx, S, BA.eng, tilf, { flak: 12, tuster: 9 });
     o.etterBunn?.();
     if (!o.lysning && tilf.sjanse(0.35)) {
       const [x, y] = plasser(tilf, S, 1, 0.25, 0.2, o)[0] ?? [];
-      if (x !== undefined) lovtre(ctx, tilf, x, y, S * 0.32, FIGUR.lov);
+      if (x !== undefined) {
+        if (BIOM === 'temperert') lovtre(ctx, tilf, x, y, S * 0.32, FIGUR.lov);
+        else biomTre(ctx, tilf, x, y, S * 0.34);
+      }
     }
     if (tilf.sjanse(0.4)) blomster(ctx, S, tilf);
   },
   skog(ctx, S, tilf, o) {
-    bunn(ctx, S, BUNN.skog, tilf, { flak: 10, tuster: 4 });
+    bunn(ctx, S, BA.skog, tilf, { flak: 10, tuster: 4 });
     o.etterBunn?.();
     for (const [x, y] of plasser(tilf, S, o.lysning ? 4 : 6, 0.17, 0.2, o)) {
       const h = S * (0.3 + tilf.tall() * 0.14);
-      if (tilf.sjanse(0.18)) lovtre(ctx, tilf, x, y, h * 0.95, tilf.sjanse(0.25) ? FIGUR.lovHost : FIGUR.lov);
-      else gran(ctx, tilf, x, y, h, tilf.sjanse(0.5) ? FIGUR.gran : FIGUR.granMork);
+      biomTre(ctx, tilf, x, y, h, tilf.sjanse(0.18));
     }
   },
   aas(ctx, S, tilf, o) {
-    bunn(ctx, S, BUNN.aas, tilf, { flak: 12, tuster: 5 });
+    bunn(ctx, S, BA.aas, tilf, { flak: 12, tuster: 5 });
     o.etterBunn?.();
     // Haugene er brede: med vei gjennom ruta blir de mindre så de får plass ved siden av.
     const smal = o.unngaa ? 0.6 : 1;
@@ -111,7 +176,7 @@ const TERRENG = {
     for (const [x, y] of plasser(tilf, S, 3, 0.15, 0.15, o)) stein(ctx, tilf, x, y, S * 0.05, FIGUR.stein);
   },
   fjell(ctx, S, tilf, o) {
-    bunn(ctx, S, BUNN.fjell, tilf, { flak: 12, tuster: 0 });
+    bunn(ctx, S, BA.fjell, tilf, { flak: 12, tuster: 0 });
     o.etterBunn?.();
     const n = tilf.sjanse(0.5) ? 2 : 3;
     const steder = o.lysning ? [[0.28, 0.42, 0.44, 0.34], [0.74, 0.46, 0.4, 0.3]] : n === 2 ? [[0.36, 0.62, 0.62, 0.55], [0.66, 0.82, 0.5, 0.4]] : [[0.3, 0.55, 0.48, 0.42], [0.68, 0.6, 0.5, 0.48], [0.48, 0.86, 0.46, 0.34]];
@@ -119,7 +184,7 @@ const TERRENG = {
     stein(ctx, tilf, S * 0.18, S * 0.86, S * 0.05, FIGUR.stein);
   },
   vann(ctx, S, tilf, o) {
-    bunn(ctx, S, BUNN.vann, tilf, { flak: 8, tuster: 0 });
+    bunn(ctx, S, BA.vann, tilf, { flak: 8, tuster: 0 });
     ctx.strokeStyle = 'rgba(255,255,255,0.4)';
     ctx.lineWidth = S * 0.012;
     ctx.lineCap = 'round';
@@ -134,12 +199,12 @@ const TERRENG = {
     if (!o.unngaa && tilf.sjanse(0.35)) {
       const x = S * (0.25 + tilf.tall() * 0.5), y = S * (0.25 + tilf.tall() * 0.5);
       poly(ctx, klump(tilf, x, y, S * 0.06, S * 0.04, 7, 0.1), '#5f9a4a');
-      poly(ctx, [[x, y], [x + S * 0.06, y - S * 0.01], [x + S * 0.06, y + S * 0.015]], BUNN.vann.midt);
+      poly(ctx, [[x, y], [x + S * 0.06, y - S * 0.01], [x + S * 0.06, y + S * 0.015]], BA.vann.midt);
     }
     o.etterBunn?.(); // bru tegnes oppå bølgene
   },
   strand(ctx, S, tilf, o) {
-    bunn(ctx, S, BUNN.strand, tilf, { flak: 14, tuster: 3 });
+    bunn(ctx, S, BA.strand, tilf, { flak: 14, tuster: 3 });
     o.etterBunn?.();
     for (const [x, y] of plasser(tilf, S, 4, 0.15, 0.15, o)) stein(ctx, tilf, x, y, S * (0.025 + tilf.tall() * 0.025), '#b9b3a6');
     if (!o.unngaa && tilf.sjanse(0.6)) skjell(ctx, S * (0.3 + tilf.tall() * 0.4), S * (0.3 + tilf.tall() * 0.4), S * 0.04);
@@ -362,6 +427,17 @@ const BYGG = {
     ctx.beginPath(); ctx.ellipse(S * 0.33, S * 0.84, S * 0.035, S * 0.04, 0, 0, Math.PI * 2); ctx.fill();
     tommerstabel(ctx, S * 0.2, S * 0.7, S * 0.04, 3);
   },
+  havn(ctx, S, tilf) {
+    brygge(ctx, S);
+    hus(ctx, S * 0.32, S * 0.4, S * 0.26, S * 0.2, S * 0.13, S * 0.1, { vegg: FIGUR.pussVegg, tak: FIGUR.takBla });
+    tonne(ctx, S * 0.16, S * 0.74, S * 0.045);
+    tonne(ctx, S * 0.26, S * 0.8, S * 0.045);
+    kasse(ctx, S * 0.42, S * 0.8, S * 0.1, S * 0.1, S * 0.07, { topp: '#c49460', venstre: '#a8784a', hoyre: '#8a5c38' });
+    // Fyrlykt / signalmast
+    ctx.fillStyle = '#6d4a30';
+    ctx.fillRect(S * 0.83, S * 0.18, S * 0.025, S * 0.3);
+    poly(ctx, [[S * 0.855, S * 0.18], [S * 0.95, S * 0.22], [S * 0.855, S * 0.27]], '#c0392b');
+  },
   molle(ctx, S, tilf) {
     molle(ctx, S * 0.5, S * 0.72, S * 1.45);
     for (const [x, y] of [[0.2, 0.86], [0.28, 0.9], [0.8, 0.88]]) sekk(ctx, S * x, S * y, S * 0.05);
@@ -521,6 +597,21 @@ function hakke(ctx, x, y, l) {
   ctx.beginPath(); ctx.moveTo(x + l * 0.15, y - l * 0.6); ctx.quadraticCurveTo(x + l * 0.45, y - l * 0.4, x + l * 0.55, y - l * 0.05); ctx.stroke();
 }
 
+/** Brygge: planker ut i vannet nede til høyre, med fortøyningspåler. */
+function brygge(ctx, S) {
+  // Litt vann i hjørnet så brygga har noe å stå i
+  poly(ctx, [[S * 0.55, S], [S, S * 0.55], [S, S], [S * 0.55, S]], '#4b93bd');
+  poly(ctx, [[S * 0.62, S], [S, S * 0.62], [S, S * 0.68], [S * 0.68, S]], 'rgba(255,255,255,0.25)');
+  const pl = ['#b9874f', '#a8784a', '#c49460'];
+  for (let k = 0; k < 7; k++) {
+    const t = k / 7;
+    const x0 = S * (0.48 + t * 0.4), y0 = S * (0.6 + t * 0.32);
+    poly(ctx, [[x0 - S * 0.07, y0 + S * 0.02], [x0 + S * 0.02, y0 - S * 0.07], [x0 + S * 0.06, y0 - S * 0.04], [x0 - S * 0.03, y0 + S * 0.05]], pl[k % 3]);
+  }
+  ctx.fillStyle = '#6d4a30';
+  for (const [x, y] of [[0.74, 0.7], [0.9, 0.84], [0.6, 0.86]]) ctx.fillRect(S * x, S * y - S * 0.06, S * 0.025, S * 0.08);
+}
+
 /** Opp-ned robåt på land. */
 function robat(ctx, x, y, l) {
   skygge(ctx, x, y + l * 0.12, l * 0.55, l * 0.12);
@@ -622,8 +713,10 @@ const BUNN_FOR = { eng: 'eng', skog: 'skog', aas: 'aas', fjell: 'fjell', vann: '
  * Tegner én rute (kort) i et S×S-område. innhold:
  *  { terreng, bygg?, nivaa?, overlegg? } – bygg tegnes på en enklere bunn uten terrengpynt.
  */
-export function tegnKort(ctx, S, tilf, { terreng, bygg, nivaa = 1, overlegg, vei, bane }) {
+export function tegnKort(ctx, S, tilf, { terreng, bygg, nivaa = 1, overlegg, vei, bane, biom = 'temperert' }) {
   ctx.save();
+  BIOM = biom;
+  BA = BIOM_BUNN[biom] ?? BUNN;
   const bru = terreng === 'vann';
   // `vei` kan være én vei eller en liste (f.eks. trevei inn og steinvei ut av en landsby).
   const veier = vei ? [].concat(vei) : [];
@@ -638,7 +731,7 @@ export function tegnKort(ctx, S, tilf, { terreng, bygg, nivaa = 1, overlegg, vei
     if (bane) tegnBane(ctx, S, tilf, bane.retninger, { bru, paaBygg: !!bygg });
   };
   if (bygg) {
-    const b = BUNN[BUNN_FOR[terreng]] ?? BUNN.eng;
+    const b = BA[BUNN_FOR[terreng]] ?? BA.eng;
     bunn(ctx, S, b, tilf, { flak: 8, tuster: 4 });
     tegnFerdsel(); // på en byggrute går veien inn mot midten, under bygget
     BYGG[bygg](ctx, S, tilf, nivaa);
@@ -654,7 +747,7 @@ export function tegnKort(ctx, S, tilf, { terreng, bygg, nivaa = 1, overlegg, vei
       etterBunn: lag.length ? tegnFerdsel : null,
     });
     if (overlegg) OVERLEGG[overlegg](ctx, S, tilf);
-    kantskygge(ctx, S, BUNN[terreng]);
+    kantskygge(ctx, S, BA[terreng]);
   }
   ctx.restore();
 }

@@ -69,7 +69,7 @@ export class Brett {
     const ctx = lerret.getContext('2d');
     const tilf = lagTilfeldig(blandSeed(this.verden.seed, this.verden.forsok, 'kort', i));
     if (innhold.ukjent) tegnUkjent(ctx, str, tilf);
-    else tegnKort(ctx, str, tilf, innhold);
+    else tegnKort(ctx, str, tilf, { ...innhold, biom: this.verden.biom });
     const k = { sig: signatur(innhold), str, lerret };
     this.kort.set(i, k);
     return k;
