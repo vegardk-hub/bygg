@@ -159,7 +159,7 @@ All tallbalanse samles i én fil (`data/balanse.js`) så det er lett å justere.
 | 0 ✅ | Kartgenerator + visning (debugknapp: «ny seed») | Kartene ser naturlige og varierte ut |
 | 1 ✅ | Kjerne: tåke, avdekke, 3 råvarer (tre, stein, korn), 3 bygg, mynter, lagring | 10 min spill uten feil og med lyst på mer |
 | 2 ✅ | Landsbyer, veier (tre → stein), handelsruter, marked | Veibygging føles lønnsomt |
-| 3 | Alle råvarer, dyr, fisk, jern, nabobonuser, oppdrag | Variert midtspill |
+| 3 ✅ | Alle råvarer, dyr, fisk, jern, nabobonuser, oppdrag | Variert midtspill |
 | 4 | Havn, skip, ny verden, havkart, seiling fram og tilbake, lager i gamle verdener, kartstjerner, nye biomer | Det er morsomt å seile tilbake og hente last |
 | 5 | Hendelser, lyd, juice, PWA-polish, iPad-test, balansering | Klar for familien |
 
@@ -237,3 +237,13 @@ mørkere kanter, svart bakgrunn `#010101`, klammer `#faf2db`). All grafikk er te
 - Grensesnitt: «Bygg vei hit fra leiren» i landsbypanelet, veimodus-knapp (🛤️, tast V), veipanel med «gjør hele veien om til stein».
 - Lagring versjon 2 med migrering fra 1. 10 nye mål.
 - Robot (test/simuler.js): handel gir ~25 🪙/dag ved dag 21 og ~110 ved dag 50; økonomien fortsetter å vokse etter dag 20.
+
+## Status fase 3 (2026-10-05)
+- Nye råvarer: 🐟 fisk, 🍖 kjøtt, ⛓️ jern (vises i råvarelinja først når man har fått noen).
+- Nye bygg: fiskebu (ved vann, +1 per vannrute), jakthytte (ved dyr, +2 per dyr i de 8 rutene rundt), gruve (på jernmalm, 2 jern),
+  sagbruk (+3 tre per nabo-hogstbu, koster jern), mølle (+3 korn per nabo-gård, koster jern). Bygg med krav som ikke er oppfylt vises med forklaring.
+- Nivå 3 krever jern. Leiren og landsbymarkedene kjøper de nye varene.
+- Mat til landsbyer: korn 1, fisk 1,5, kjøtt 2 mat per enhet, +50 % for annen mat enn sist.
+- Oppdrag: landsbyer koblet til leiren ber om én vare; belønning 1,5 × markedspris + mat; én dags pause mellom oppdrag.
+- Lagring versjon 3 (migrering legger til nye varer). 9 nye mål.
+- Testet: regeltester og robot i Node, røyktest av tegning i nettleseren (etter ønske: ingen full brukertest).

@@ -1,7 +1,9 @@
 // Alt som er HTML rundt kartet: råvarelinja, mål, rutepanelet, meldinger og menyen.
 // Får data inn og kaller tilbake til main.js ved trykk – inneholder ingen spillregler.
 
-import { RAVARER, RAVARE_REKKEFOLGE, BYGG, PRIS, MAKS_NIVAA, VEI, LANDSBY, MARKED } from './data/balanse.js';
+import {
+  RAVARER, RAVARE_REKKEFOLGE, SKJULT_TIL_FUNNET, BYGG, PRIS, MAKS_NIVAA, VEI, LANDSBY, MARKED,
+} from './data/balanse.js';
 import { TERRENG, T } from './data/terreng.js';
 import * as S from './spill.js';
 
@@ -29,6 +31,7 @@ function kostHtml(kost, lager) {
 // Råvarelinja
 // ---------------------------------------------------------------------------
 const forrigeLager = {};
+const sett = new Set(); // råvarer som har vært synlige (blir værende)
 
 export function oppdaterHud(spill, inntekt) {
   const boks = $('ravarer');
@@ -40,6 +43,8 @@ export function oppdaterHud(spill, inntekt) {
   for (const r of RAVARE_REKKEFOLGE) {
     const el = boks.querySelector(`[data-r="${r}"]`);
     const n = spill.lager[r] || 0;
+    if (n > 0 || inntekt[r] > 0) sett.add(r);
+    el.hidden = SKJULT_TIL_FUNNET.includes(r) && !sett.has(r);
     el.querySelector('.tall').textContent = n;
     el.querySelector('.per-dag').textContent = inntekt[r] ? `+${inntekt[r]}` : '';
     el.title = `${RAVARER[r].navn}${inntekt[r] ? ` – får ${inntekt[r]} per dag` : ''}`;
@@ -101,7 +106,7 @@ export function rist(id) {
 // Rutepanelet
 // ---------------------------------------------------------------------------
 const TERRENG_TEKST = {
-  [T.VANN]: 'Vann. Her kan det fiskes senere 🐟',
+  [T.VANN]: 'Vann. Bygg en fiskebu på land ved vannet for å fiske 🐟',
   [T.STRAND]: 'Strand. Her kan det bygges havn senere ⚓',
   [T.GRESS]: 'Eng – god jord for gårder.',
   [T.SKOG]: 'Skog – her finnes det tre.',
@@ -145,16 +150,32 @@ function landsbyHtml(spill, verden, i) {
     return html;
   }
   html += handelHtml(spill, verden, i) || '<p class="liten">Koblet til leiren med vei.</p>';
+  // Oppdrag
+  if (l.oppdrag) {
+    const o = l.oppdrag;
+    html += `<h3 class="seksjon">📜 Oppdrag</h3><div class="valg">${valgKnapp({
+      ikon: '📜', navn: `Lever ${o.antall} ${RAVARER[o.vare].ikon} ${RAVARER[o.vare].navn.toLowerCase()}`, gir: `+${o.mynter} 🪙`,
+      kost: { [o.vare]: o.antall }, lager: spill.lager, forklaring: 'Landsbyen vokser også litt.', data: 'data-oppdrag',
+    })}</div>`;
+  } else {
+    html += '<p class="liten">📜 Landsbyen har et nytt oppdrag til deg i morgen.</p>';
+  }
   // Mat og vekst
   if (l.str < LANDSBY.maksStorrelse) {
     const trenger = LANDSBY.vekst[l.str];
-    html += `<h3 class="seksjon">🌾 Mat til landsbyen</h3>
-      <div class="stolpe"><i style="width:${Math.round((l.mat / trenger) * 100)}%"></i></div>
-      <p class="liten">${l.mat} / ${trenger} korn til størrelse ${l.str + 1}. Større landsby gir mer handel.</p>
-      <div class="valg">${valgKnapp({
-        ikon: '🧺', navn: `Gi ${LANDSBY.leveranse} korn`, kost: { korn: Math.min(LANDSBY.leveranse, Math.max(1, spill.lager.korn || 0)) },
-        lager: spill.lager, data: 'data-mat',
-      })}</div>`;
+    html += `<h3 class="seksjon">🧺 Mat til landsbyen</h3>
+      <div class="stolpe"><i style="width:${Math.min(100, Math.round((l.mat / trenger) * 100))}%"></i></div>
+      <p class="liten">${l.mat} / ${trenger} mat til størrelse ${l.str + 1}. Større landsby gir mer handel. Gi en annen mat enn sist for +50 %!</p><div class="valg">`;
+    for (const vare of Object.keys(LANDSBY.matverdi)) {
+      if (vare !== 'korn' && !(spill.lager[vare] > 0)) continue;
+      const n = Math.min(LANDSBY.leveranse, Math.max(1, spill.lager[vare] || 0));
+      const { mat, variasjon } = S.matVerdi(spill, verden, i, vare, n);
+      html += valgKnapp({
+        ikon: RAVARER[vare].ikon, navn: `Gi ${LANDSBY.leveranse} ${RAVARER[vare].navn.toLowerCase()}`, gir: `+${mat} mat`,
+        kost: { [vare]: n }, lager: spill.lager, forklaring: variasjon ? '🌈 Variasjonsbonus!' : '', data: `data-mat="${vare}"`,
+      });
+    }
+    html += '</div>';
   } else {
     html += '<p class="liten">⭐ Landsbyen er så stor den kan bli!</p>';
   }
@@ -204,7 +225,7 @@ function veiHtml(spill, verden, i) {
 
 /**
  * Viser panelet for rute i. `h` = handlinger:
- * { bygg(type), oppgrader(), selg(ravare, antall), byggVei(), steinvei(ruter), veiHit(), mat(), marked(vare, antall) }.
+ * { bygg(type), oppgrader(), selg(ravare, antall), byggVei(), steinvei(alle), veiHit(), mat(vare), oppdrag(), marked(vare, antall) }.
  */
 export function visRutepanel(spill, verden, i, h) {
   const panel = $('rutepanel');
@@ -246,11 +267,16 @@ export function visRutepanel(spill, verden, i, h) {
     html += veiHtml(spill, verden, i);
   } else {
     html += `<h2>${terreng.ikon} ${terreng.navn}</h2><p class="info-linje">${TERRENG_TEKST[verden.terreng[i]]}</p>`;
-    if (o?.type === 'dyr') html += `<p class="info-linje">${o.art === 'hjort' ? '🦌 En hjort' : '🐑 En villsau'} bor her. Jakthytte kommer senere.</p>`;
-    if (o?.type === 'malm') html += '<p class="info-linje">⛓️ Jernmalm! En gruve kan bygges her senere.</p>';
+    if (o?.type === 'dyr') html += `<p class="info-linje">${o.art === 'hjort' ? '🦌 En hjort' : '🐑 En villsau'} bor her. Bygg en jakthytte rett ved siden av for å få kjøtt.</p>`;
+    if (o?.type === 'malm') html += '<p class="info-linje">⛓️ Jernmalm! Bygg en gruve her for å få jern.</p>';
     const valg = [];
-    for (const type of S.muligeBygg(spill, verden, i)) {
+    const mangler = [];
+    for (const type of S.muligeBygg(spill, verden, i, { medKrav: false })) {
       const def = BYGG[type];
+      if (!S.kravOppfylt(spill, verden, i, type)) {
+        mangler.push(`${def.ikon} ${def.navn}: ${def.krav.tekst.toLowerCase()}`);
+        continue;
+      }
       const prod = S.produksjon(spill, verden, i, type, 1);
       valg.push(valgKnapp({
         ikon: def.ikon, navn: `Bygg ${def.navn.toLowerCase()}`, gir: `${gaveTekst(prod.gave)}/dag`,
@@ -265,6 +291,7 @@ export function visRutepanel(spill, verden, i, h) {
       }));
     }
     if (valg.length) html += `<div class="valg">${valg.join('')}</div>`;
+    if (mangler.length) html += `<p class="liten">Kan ikke bygges her ennå:<br>${mangler.map(esc).join('<br>')}</p>`;
   }
 
   innhold.innerHTML = html;
@@ -275,7 +302,8 @@ export function visRutepanel(spill, verden, i, h) {
   koble('[data-vei]', () => h.byggVei());
   koble('[data-steinvei]', (k) => h.steinvei(k.dataset.steinvei === 'alle'));
   koble('[data-vei-hit]', () => h.veiHit());
-  koble('[data-mat]', () => h.mat());
+  koble('[data-mat]', (k) => h.mat(k.dataset.mat));
+  koble('[data-oppdrag]', () => h.oppdrag());
   koble('[data-marked]', (k) => h.marked(k.dataset.marked, Number(k.dataset.antall)));
   panel.hidden = false;
 }

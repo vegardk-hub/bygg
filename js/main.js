@@ -122,7 +122,8 @@ function visPanel() {
     byggVei: () => behandle(S.byggVei(spill, verden, t.valgt)),
     steinvei: (alle) => behandle(S.oppgraderVei(spill, verden, alle ? S.treveierINettet(spill, verden, t.valgt) : [t.valgt])),
     veiHit: () => behandle(S.byggVeiTilLeiren(spill, verden, t.valgt)),
-    mat: () => behandle(S.giMat(spill, verden, t.valgt)),
+    mat: (vare) => behandle(S.giMat(spill, verden, t.valgt, vare)),
+    oppdrag: () => behandle(S.leverOppdrag(spill, verden, t.valgt)),
     marked: (vare, n) => behandle(S.selgIMarked(spill, verden, t.valgt, vare, n)),
   });
 }
@@ -216,8 +217,18 @@ function behandle(hendelser) {
       }
       case 'mat': {
         const { kx, ky } = midt(h.i);
-        flytendeTekst(kx, ky, `🧺 ${h.antall} 🌾`, { farge: '#fff3b0' });
+        flytendeTekst(kx, ky, `🧺 +${h.mat} mat${h.variasjon ? ' 🌈' : ''}`, { farge: '#fff3b0' });
         lyd('bygg');
+        break;
+      }
+      case 'oppdrag':
+        P.melding(h.tekst);
+        break;
+      case 'oppdragFerdig': {
+        const { kx, ky } = midt(h.i);
+        flytendeTekst(kx, ky, `+${h.mynter} 🪙`, { farge: '#ffe27a' });
+        sprut(kx, ky, { farger: ['#ffd23f', '#fff3b0', '#e0a030'], antall: 22 });
+        setTimeout(() => { P.melding(h.tekst, 'maal'); lyd('maal'); }, 150);
         break;
       }
       case 'vekst': {

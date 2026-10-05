@@ -7,7 +7,7 @@ import {
   nyttSpill, avdekk, kanAvdekkes, avdekkKost, bygg, muligeBygg, byggKost, oppgrader, oppgraderKost,
   produksjon, inntektPerDag, nyDag, selg, harRad, aktiveMaal,
   byggVei, kanHaVei, handelsruter, kobletTilLeiren, veiTilLeirenPlan, byggVeiTilLeiren,
-  treveierINettet, oppgraderVei, steinKostFor, giMat, selgIMarked, landsby, markedsverdi,
+  treveierINettet, oppgraderVei, steinKostFor, giMat, selgIMarked, landsby, markedsverdi, leverOppdrag,
 } from '../js/spill.js';
 import { tilData, fraData } from '../js/lagring.js';
 import { BYGG } from '../js/data/balanse.js';
@@ -59,7 +59,7 @@ const DAGER = Number(process.argv[3] ?? 60);
   const B = verden.bredde;
   // Avdekk alt, så vi kan teste veier fritt.
   spill.avdekket.fill(1);
-  spill.lager = { mynter: 999, tre: 999, stein: 999, korn: 999 };
+  spill.lager = { mynter: 999, tre: 999, stein: 999, korn: 999, fisk: 999, kjott: 999, jern: 999 };
   const leir = verden.start.y * B + verden.start.x;
   const landsbyer = [...verden.landsbynavn.keys()].sort((a, b) =>
     Math.hypot((a % B) - verden.start.x, Math.floor(a / B) - verden.start.y) - Math.hypot((b % B) - verden.start.x, Math.floor(b / B) - verden.start.y));
@@ -129,7 +129,11 @@ function robotDag() {
       if (plan && plan.ruter.length && harRad(spill, plan.kost)) loggHendelser(byggVeiTilLeiren(spill, verden, i));
       continue;
     }
-    if (spill.lager.korn >= 20) loggHendelser(giMat(spill, verden, i));
+    // Gi den maten vi har mest av (gir variasjon over tid), og lever oppdrag når vi kan.
+    const mat = ['korn', 'fisk', 'kjott'].sort((a, b) => (spill.lager[b] || 0) - (spill.lager[a] || 0))[0];
+    if (spill.lager[mat] >= 20) loggHendelser(giMat(spill, verden, i, mat));
+    const o = landsby(spill, verden, i).oppdrag;
+    if (o && harRad(spill, { [o.vare]: o.antall })) loggHendelser(leverOppdrag(spill, verden, i));
     for (const vare of Object.keys(landsby(spill, verden, i).priser)) {
       if (spill.lager[vare] > 20) loggHendelser(selgIMarked(spill, verden, i, vare, spill.lager[vare] - 20));
     }
@@ -183,7 +187,7 @@ function robotDag() {
 
 function loggHendelser(h) {
   for (const e of h) {
-    if (['maal', 'funn', 'nyRute', 'vekst'].includes(e.type)) maalLogg.push(`dag ${spill.dag}: ${e.type === 'maal' ? '🎯 ' : ''}${e.tekst}`);
+    if (['maal', 'funn', 'nyRute', 'vekst', 'oppdragFerdig'].includes(e.type)) maalLogg.push(`dag ${spill.dag}: ${e.type === 'maal' ? '🎯 ' : ''}${e.tekst}`);
   }
 }
 

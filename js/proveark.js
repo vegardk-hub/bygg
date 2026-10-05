@@ -11,6 +11,7 @@ let seed = 1;
 const NAVN = {
   eng: 'Eng', skog: 'Skog', aas: 'Ås', fjell: 'Fjell', vann: 'Vann', strand: 'Strand',
   leir: 'Leiren', hogstbu: 'Hogstbu', gard: 'Gård', steinbrudd: 'Steinbrudd', landsby: 'Landsby',
+  fiskebu: 'Fiskebu', jakthytte: 'Jakthytte', gruve: 'Gruve', sagbruk: 'Sagbruk', molle: 'Mølle',
   sau: 'Sau', hjort: 'Hjort', baer: 'Bærbusk', malm: 'Jernmalm', skatt: 'Skatt',
 };
 
@@ -173,7 +174,9 @@ function galleri(id, S, liste) {
 function terrengGalleri() {
   const liste = [];
   for (const t of TERRENGTYPER) for (let k = 0; k < 3; k++) liste.push([{ terreng: t }, NAVN[t]]);
-  for (const b of BYGGTYPER) liste.push([{ terreng: b === 'hogstbu' ? 'skog' : b === 'steinbrudd' ? 'aas' : 'eng', bygg: b }, NAVN[b]]);
+  const byggTerreng = { hogstbu: 'skog', steinbrudd: 'aas', gruve: 'fjell', fiskebu: 'strand', jakthytte: 'skog' };
+  for (const b of BYGGTYPER) liste.push([{ terreng: byggTerreng[b] ?? 'eng', bygg: b }, NAVN[b]]);
+  for (const str of [1, 3, 5]) liste.push([{ terreng: 'eng', bygg: 'landsby', nivaa: str }, `Landsby str. ${str}`]);
   liste.push([{ terreng: 'eng', bygg: 'gard', nivaa: 2 }, 'Gård nivå 2']);
   liste.push([{ terreng: 'eng', bygg: 'gard', nivaa: 3 }, 'Gård nivå 3']);
   liste.push([{ terreng: 'skog', bygg: 'hogstbu', nivaa: 3 }, 'Hogstbu nivå 3']);

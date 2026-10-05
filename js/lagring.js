@@ -10,6 +10,8 @@ const NOKKEL = 'bygg-lagring';
 const MIGRERINGER = {
   // Versjon 2 (fase 2): veier og landsbyer.
   1: (d) => ({ ...d, versjon: 2, veier: [], landsbyer: [], flytt: [] }),
+  // Versjon 3 (fase 3): fisk, kjøtt og jern i lageret.
+  2: (d) => ({ ...d, versjon: 3, lager: { fisk: 0, kjott: 0, jern: 0, ...d.lager } }),
 };
 
 export function tilData(spill) {

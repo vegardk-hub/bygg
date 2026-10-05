@@ -330,6 +330,42 @@ const BYGG = {
     vogn(ctx, tilf, S * 0.74, S * 0.84, S * 0.17);
     hakke(ctx, S * 0.57, S * 0.93, S * 0.12);
   },
+  fiskebu(ctx, S, tilf) {
+    robat(ctx, S * 0.72, S * 0.36, S * 0.2);
+    hus(ctx, S * 0.36, S * 0.48, S * 0.28, S * 0.22, S * 0.13, S * 0.11, { vegg: FIGUR.treVegg, tak: FIGUR.takBla });
+    torkestativ(ctx, S * 0.58, S * 0.88, S * 0.32);
+    tonne(ctx, S * 0.18, S * 0.86, S * 0.05);
+  },
+  jakthytte(ctx, S, tilf) {
+    gran(ctx, tilf, S * 0.18, S * 0.36, S * 0.28, FIGUR.granMork);
+    gran(ctx, tilf, S * 0.84, S * 0.32, S * 0.26, FIGUR.gran);
+    hus(ctx, S * 0.48, S * 0.52, S * 0.3, S * 0.24, S * 0.13, S * 0.12, { vegg: ['#8a5c38', '#6b4428'], tak: FIGUR.takMork });
+    skinnramme(ctx, S * 0.76, S * 0.9, S * 0.2);
+    baal(ctx, S * 0.26, S * 0.86, S * 0.07);
+  },
+  gruve(ctx, S, tilf) {
+    topp(ctx, tilf, S * 0.52, S * 0.66, S * 0.84, S * 0.56, FIGUR.fjell, FIGUR.sno);
+    gruveinngang(ctx, S * 0.42, S * 0.66, S * 0.22);
+    // Skinner ut fra gruva
+    ctx.strokeStyle = '#4d515a';
+    ctx.lineWidth = S * 0.012;
+    for (const dx of [-0.035, 0.035]) {
+      ctx.beginPath(); ctx.moveTo(S * (0.42 + dx), S * 0.66); ctx.lineTo(S * (0.5 + dx * 1.6), S * 0.95); ctx.stroke();
+    }
+    vogn(ctx, tilf, S * 0.7, S * 0.88, S * 0.17, FIGUR.malm[0]);
+  },
+  sagbruk(ctx, S, tilf) {
+    hus(ctx, S * 0.36, S * 0.42, S * 0.3, S * 0.24, S * 0.13, S * 0.1, { vegg: FIGUR.treVegg, tak: FIGUR.takRod });
+    sagblad(ctx, S * 0.74, S * 0.56, S * 0.1);
+    kasse(ctx, S * 0.5, S * 0.84, S * 0.4, S * 0.08, S * 0.06, { topp: '#c49460', venstre: '#a8784a', hoyre: '#8a5c38' });
+    ctx.fillStyle = '#d8b07a';
+    ctx.beginPath(); ctx.ellipse(S * 0.33, S * 0.84, S * 0.035, S * 0.04, 0, 0, Math.PI * 2); ctx.fill();
+    tommerstabel(ctx, S * 0.2, S * 0.7, S * 0.04, 3);
+  },
+  molle(ctx, S, tilf) {
+    molle(ctx, S * 0.5, S * 0.72, S * 1.45);
+    for (const [x, y] of [[0.2, 0.86], [0.28, 0.9], [0.8, 0.88]]) sekk(ctx, S * x, S * y, S * 0.05);
+  },
   /** Landsbyen vokser synlig: størrelse 1 = to hus, 2 = tre hus, 3+ = kirke, 5 = flagg. */
   landsby(ctx, S, tilf, str = 2) {
     hus(ctx, S * 0.32, S * 0.36, S * 0.26, S * 0.22, S * 0.14, S * 0.12, { vegg: FIGUR.pussVegg, tak: FIGUR.takBla });
@@ -468,10 +504,10 @@ function fjellvegg(ctx, tilf, S) {
   }
 }
 
-function vogn(ctx, tilf, x, y, w) {
+function vogn(ctx, tilf, x, y, w, last = '#b4b9c3') {
   skygge(ctx, x, y, w * 0.6, w * 0.15);
   kasse(ctx, x, y - w * 0.12, w * 0.7, w * 0.45, w * 0.28, { topp: '#5a4a3e', venstre: '#8a6a4c', hoyre: '#6a4f38' });
-  for (let k = 0; k < 3; k++) stein(ctx, tilf, x - w * 0.12 + k * w * 0.12, y - w * 0.36, w * 0.09, '#b4b9c3');
+  for (let k = 0; k < 3; k++) stein(ctx, tilf, x - w * 0.12 + k * w * 0.12, y - w * 0.36, w * 0.09, last);
   ctx.fillStyle = '#3b3a3f';
   for (const [dx, dy] of [[-0.28, 0.02], [0.05, 0.12]]) {
     ctx.beginPath(); ctx.ellipse(x + dx * w, y + dy * w - w * 0.08, w * 0.1, w * 0.12, 0, 0, Math.PI * 2); ctx.fill();
@@ -483,6 +519,78 @@ function hakke(ctx, x, y, l) {
   ctx.beginPath(); ctx.moveTo(x - l * 0.5, y); ctx.lineTo(x + l * 0.4, y - l * 0.35); ctx.stroke();
   ctx.strokeStyle = '#a7adb8'; ctx.lineWidth = l * 0.1;
   ctx.beginPath(); ctx.moveTo(x + l * 0.15, y - l * 0.6); ctx.quadraticCurveTo(x + l * 0.45, y - l * 0.4, x + l * 0.55, y - l * 0.05); ctx.stroke();
+}
+
+/** Opp-ned robåt på land. */
+function robat(ctx, x, y, l) {
+  skygge(ctx, x, y + l * 0.12, l * 0.55, l * 0.12);
+  poly(ctx, [[x - l / 2, y], [x - l * 0.3, y - l * 0.22], [x + l * 0.4, y - l * 0.2], [x + l / 2, y]], '#c0614a');
+  poly(ctx, [[x - l / 2, y], [x + l / 2, y], [x + l * 0.42, y + l * 0.1], [x - l * 0.42, y + l * 0.1]], '#8e3d2c');
+}
+
+/** Tørkestativ for fisk: to stolper, en line og fisk som henger. */
+function torkestativ(ctx, x, y, b) {
+  ctx.fillStyle = '#6b4a30';
+  ctx.fillRect(x - b / 2, y - b * 0.7, b * 0.05, b * 0.7);
+  ctx.fillRect(x + b / 2 - b * 0.05, y - b * 0.7, b * 0.05, b * 0.7);
+  ctx.strokeStyle = '#6b4a30';
+  ctx.lineWidth = b * 0.025;
+  ctx.beginPath(); ctx.moveTo(x - b / 2, y - b * 0.66); ctx.lineTo(x + b / 2, y - b * 0.66); ctx.stroke();
+  for (let k = 0; k < 4; k++) {
+    const fx = x - b * 0.32 + k * b * 0.21, fy = y - b * 0.62;
+    poly(ctx, [[fx - b * 0.035, fy], [fx + b * 0.035, fy], [fx + b * 0.025, fy + b * 0.22], [fx - b * 0.025, fy + b * 0.22]], k % 2 ? '#8fa7b8' : '#a9bccb');
+    poly(ctx, [[fx, fy + b * 0.2], [fx - b * 0.05, fy + b * 0.3], [fx + b * 0.05, fy + b * 0.3]], '#7890a2');
+  }
+}
+
+function tonne(ctx, x, y, r) {
+  skygge(ctx, x + r * 0.3, y, r * 1.2, r * 0.35);
+  poly(ctx, [[x - r, y], [x - r * 1.1, y - r * 1.2], [x - r, y - r * 2.2], [x + r, y - r * 2.2], [x + r * 1.1, y - r * 1.2], [x + r, y]], '#9a6a40');
+  ctx.fillStyle = '#c49460';
+  ctx.beginPath(); ctx.ellipse(x, y - r * 2.2, r, r * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#5b5e66'; ctx.lineWidth = r * 0.15;
+  for (const h of [0.5, 1.7]) { ctx.beginPath(); ctx.moveTo(x - r * 1.05, y - r * h); ctx.lineTo(x + r * 1.05, y - r * h); ctx.stroke(); }
+}
+
+/** Ramme med et skinn som tørker. */
+function skinnramme(ctx, x, y, b) {
+  ctx.fillStyle = '#6b4a30';
+  for (const dx of [-0.5, 0.45]) ctx.fillRect(x + b * dx, y - b * 0.9, b * 0.06, b * 0.9);
+  ctx.fillRect(x - b * 0.5, y - b * 0.88, b, b * 0.05);
+  poly(ctx, [[x - b * 0.36, y - b * 0.8], [x + b * 0.32, y - b * 0.8], [x + b * 0.4, y - b * 0.5], [x + b * 0.28, y - b * 0.18], [x - b * 0.3, y - b * 0.2], [x - b * 0.42, y - b * 0.5]], '#b07a48');
+  poly(ctx, [[x - b * 0.2, y - b * 0.7], [x + b * 0.15, y - b * 0.7], [x + b * 0.2, y - b * 0.45], [x - b * 0.18, y - b * 0.35]], '#c99060');
+}
+
+/** Gruveinngang: mørk åpning med tømmerkarm, på foten av fjellet. */
+function gruveinngang(ctx, x, y, b) {
+  poly(ctx, [[x - b / 2, y], [x - b / 2, y - b * 0.55], [x - b * 0.3, y - b * 0.8], [x + b * 0.3, y - b * 0.8], [x + b / 2, y - b * 0.55], [x + b / 2, y]], '#26242b');
+  ctx.fillStyle = '#7a5236';
+  ctx.fillRect(x - b * 0.58, y - b * 0.85, b * 0.12, b * 0.85);
+  ctx.fillRect(x + b * 0.46, y - b * 0.85, b * 0.12, b * 0.85);
+  ctx.fillRect(x - b * 0.64, y - b * 0.95, b * 1.28, b * 0.13);
+  ctx.fillStyle = '#ffd54a';
+  ctx.beginPath(); ctx.arc(x + b * 0.7, y - b * 0.6, b * 0.07, 0, Math.PI * 2); ctx.fill();
+}
+
+/** Stort rundt sagblad med tenner. */
+function sagblad(ctx, x, y, r) {
+  const tenner = [];
+  for (let k = 0; k < 24; k++) {
+    const v = (k / 24) * Math.PI * 2;
+    tenner.push([x + Math.cos(v) * r * (k % 2 ? 1.12 : 0.98), y + Math.sin(v) * r * (k % 2 ? 1.12 : 0.98)]);
+  }
+  poly(ctx, tenner, '#c9ced6');
+  ctx.fillStyle = '#e3e7ec';
+  ctx.beginPath(); ctx.arc(x - r * 0.15, y - r * 0.15, r * 0.55, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#5b5e66';
+  ctx.beginPath(); ctx.arc(x, y, r * 0.18, 0, Math.PI * 2); ctx.fill();
+}
+
+/** Kornsekk. */
+function sekk(ctx, x, y, r) {
+  skygge(ctx, x + r * 0.3, y, r * 1.1, r * 0.35);
+  poly(ctx, [[x - r, y], [x - r * 0.9, y - r * 1.3], [x - r * 0.3, y - r * 1.7], [x + r * 0.3, y - r * 1.7], [x + r * 0.9, y - r * 1.3], [x + r, y]], '#efe3c8');
+  poly(ctx, [[x + r * 0.3, y - r * 1.7], [x + r * 0.9, y - r * 1.3], [x + r, y], [x + r * 0.2, y]], '#cfc2a3');
 }
 
 /** Liten hvit kirke med tårn og spir. */

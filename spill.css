@@ -270,3 +270,4 @@ main { position: relative; flex: 1; min-height: 0; }
   width: max-content; max-width: 92%;
 }
 .venstreknapper { display: flex; gap: 8px; }
+.ravare[hidden] { display: none; }

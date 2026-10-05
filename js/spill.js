@@ -9,7 +9,7 @@ import { navngiLandsbyer } from './navn.js';
 import { T, START } from './data/terreng.js';
 import {
   START_LAGER, AVDEKK, BYGG, BYGG_KOSTVEKST, NIVAA, OPPGRADER_KOSTVEKST, MAKS_NIVAA, PRIS, FUNN,
-  RAVARE_REKKEFOLGE, VEI, LANDSBY, MARKED,
+  RAVARE_REKKEFOLGE, VEI, LANDSBY, MARKED, OPPDRAG,
 } from './data/balanse.js';
 import { MAAL, SYNLIGE_MAAL } from './data/maal.js';
 import {
@@ -17,12 +17,13 @@ import {
 } from './veinett.js';
 import { blandSeed, lagTilfeldig } from './rng.js';
 
-export const SPILL_VERSJON = 2;
+export const SPILL_VERSJON = 3;
 
 /** Statistikk-feltene. Nye felt får 0 når en gammel lagring lastes. */
 export const TOM_STAT = {
   avdekket: 0, bygget: 0, oppgradert: 0, solgt: 0, skatter: 0, landsbyer: 0, tjent: 0, dager: 0, gardNabo: 0,
   veier: 0, broer: 0, steinveier: 0, handel: 0, matLevert: 0, kobletLandsbyer: 0, storsteLandsby: 1,
+  oppdrag: 0, matTyper: 0, // matTyper: bitmaske over hvilke matvarer som er gitt (korn 1, fisk 2, kjøtt 4)
 };
 
 // ---------------------------------------------------------------------------
@@ -161,16 +162,48 @@ export function byggKost(spill, type) {
 /** Overlegg som opptar ruta (de får egne bygg i senere faser: jakthytte, gruve, handel). */
 const OPPTAR_RUTA = ['landsby', 'dyr', 'malm'];
 
-/** Hvilke bygg kan stå på denne ruta (uansett om man har råd)? */
-export function muligeBygg(spill, verden, i) {
-  if (!spill.avdekket[i] || spill.bygg.has(i) || spill.veier.has(i) || OPPTAR_RUTA.includes(verden.overlegg.get(i)?.type)) return [];
+/** De 8 rutene rundt i (også diagonalt). */
+function naboer8(verden, i) {
+  const B = verden.bredde, x = i % B, y = Math.floor(i / B), ut = [];
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dy) continue;
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && ny >= 0 && nx < B && ny < verden.hoyde) ut.push(ny * B + nx);
+    }
+  }
+  return ut;
+}
+
+const dyrRundt = (verden, i) => naboer8(verden, i).filter((j) => verden.overlegg.get(j)?.type === 'dyr').length;
+
+/** Er byggets krav oppfylt på denne ruta? (Vann ved siden av, dyr rundt, riktig nabobygg.) */
+export function kravOppfylt(spill, verden, i, type) {
+  const k = BYGG[type].krav;
+  if (!k) return true;
+  if (k.naboTerreng !== undefined && !naboer(verden, i).some((j) => verden.terreng[j] === k.naboTerreng)) return false;
+  if (k.dyrRundt && !dyrRundt(verden, i)) return false;
+  if (k.naboBygg && !naboer(verden, i).some((j) => spill.bygg.get(j)?.type === k.naboBygg)) return false;
+  return true;
+}
+
+/**
+ * Bygg som passer på ruta (riktig terreng og overlegg). `medKrav` = true: bare de der
+ * kravene også er oppfylt. Uten: også de som mangler krav (panelet viser hvorfor).
+ */
+export function muligeBygg(spill, verden, i, { medKrav = true } = {}) {
+  if (!spill.avdekket[i] || spill.bygg.has(i) || spill.veier.has(i)) return [];
+  const o = verden.overlegg.get(i)?.type;
   return Object.entries(BYGG)
     .filter(([, b]) => b.kanBygges && b.paa.includes(verden.terreng[i]))
+    .filter(([, b]) => (b.paaOverlegg ? o === b.paaOverlegg : !OPPTAR_RUTA.includes(o)))
+    .filter(([type]) => !medKrav || kravOppfylt(spill, verden, i, type))
     .map(([type]) => type);
 }
 
 export function bygg(spill, verden, i, type) {
-  if (!muligeBygg(spill, verden, i).includes(type)) return [{ type: 'feil', tekst: 'Det kan ikke bygges her.' }];
+  if (!muligeBygg(spill, verden, i, { medKrav: false }).includes(type)) return [{ type: 'feil', tekst: 'Det kan ikke bygges her.' }];
+  if (!kravOppfylt(spill, verden, i, type)) return [{ type: 'feil', tekst: BYGG[type].krav.tekst }];
   const kost = byggKost(spill, type);
   if (!harRad(spill, kost)) return [{ type: 'feil', tekst: 'Du har ikke nok råvarer ennå.', mangler: kost }];
   trekk(spill, kost);
@@ -210,10 +243,12 @@ export function produksjon(spill, verden, i, type = spill.bygg.get(i)?.type, niv
     if (def.nabo.terreng?.includes(verden.terreng[j])) bonus += def.nabo.pr;
     if (def.nabo.bygg && spill.bygg.get(j)?.type === def.nabo.bygg) bonus += def.nabo.pr;
   }
+  if (def.nabo.dyr) bonus += dyrRundt(verden, i) * def.nabo.pr;
   const gang = nivaa > 1 ? NIVAA[nivaa].gang : 1;
   const mengde = (def.grunn + bonus) * gang;
-  const deler = [`${def.grunn} grunn`];
-  if (bonus) deler.push(`+${bonus} fra naboer`);
+  const deler = def.grunn ? [`${def.grunn} grunn`] : [];
+  if (bonus) deler.push(`${def.grunn ? '+' : ''}${bonus} fra naboer`);
+  if (!def.grunn && !bonus) deler.push('ingen naboer som gir noe ennå');
   if (gang > 1) deler.push(`× ${gang} (nivå ${nivaa})`);
   return { gave: { [def.ravare]: mengde }, forklaring: deler.join(' ') };
 }
@@ -239,9 +274,14 @@ export function nyDag(spill, verden) {
     spill.stat.handel += rute.mynter;
     hendelser.push({ type: 'handel', ...rute });
   }
-  // Markedsprisene henter seg inn over natta.
-  for (const l of spill.landsbyer.values()) {
+  // Markedsprisene henter seg inn over natta, og landsbyer uten oppdrag finner på et nytt.
+  for (const [i, l] of spill.landsbyer) {
     for (const vare of Object.keys(l.priser)) l.priser[vare] += (1 - l.priser[vare]) * MARKED.gjenopprettingPerDag;
+    if (!l.oppdrag && l.pause > 0) l.pause--;
+    else if (!l.oppdrag && kobletTilLeiren(spill, verden, i)) {
+      l.oppdrag = nyttOppdrag(spill, verden, i, l);
+      hendelser.push({ type: 'oppdrag', i, tekst: `📜 ${verden.landsbynavn.get(i)} har et nytt oppdrag!` });
+    }
   }
   spill.dag++;
   spill.stat.dager++;
@@ -380,23 +420,78 @@ export function landsby(spill, verden, i) {
   return spill.landsbyer.get(i);
 }
 
-export function giMat(spill, verden, i) {
+/** Hvor mye vekst gir n enheter av en matvare nå (med variasjonsbonus)? */
+export function matVerdi(spill, verden, i, vare, n) {
   const l = landsby(spill, verden, i);
-  if (!kobletTilLeiren(spill, verden, i)) return [{ type: 'feil', tekst: 'Bygg vei til landsbyen først, så maten kommer fram.' }];
-  if (l.str >= LANDSBY.maksStorrelse) return [{ type: 'feil', tekst: 'Landsbyen er så stor den kan bli!' }];
-  const n = Math.min(LANDSBY.leveranse, spill.lager.korn || 0);
-  if (n <= 0) return [{ type: 'feil', tekst: 'Du har ikke noe korn å gi.', mangler: { korn: LANDSBY.leveranse } }];
-  spill.lager.korn -= n;
-  l.mat += n;
-  spill.stat.matLevert += n;
-  const hendelser = [{ type: 'mat', i, antall: n }];
+  const bonus = l.sisteMat && l.sisteMat !== vare ? 1 + LANDSBY.variasjonsbonus : 1;
+  return { mat: Math.round(n * LANDSBY.matverdi[vare] * bonus), variasjon: bonus > 1 };
+}
+
+/** Legger mat til landsbyen og lar den vokse. Returnerer vekst-hendelser. */
+function voks(spill, verden, i, l, mat) {
+  const hendelser = [];
+  if (l.str >= LANDSBY.maksStorrelse) return hendelser;
+  l.mat += mat;
   while (l.str < LANDSBY.maksStorrelse && l.mat >= LANDSBY.vekst[l.str]) {
     l.mat -= LANDSBY.vekst[l.str];
     l.str++;
     spill.stat.storsteLandsby = Math.max(spill.stat.storsteLandsby, l.str);
     hendelser.push({ type: 'vekst', i, str: l.str, tekst: `${verden.landsbynavn.get(i)} vokser! Nå størrelse ${l.str} 🏘️` });
   }
-  return hendelser.concat(sjekkMaal(spill));
+  if (l.str >= LANDSBY.maksStorrelse) l.mat = 0;
+  return hendelser;
+}
+
+const MATBIT = { korn: 1, fisk: 2, kjott: 4 };
+
+export function giMat(spill, verden, i, vare = 'korn') {
+  const l = landsby(spill, verden, i);
+  if (!kobletTilLeiren(spill, verden, i)) return [{ type: 'feil', tekst: 'Bygg vei til landsbyen først, så maten kommer fram.' }];
+  if (l.str >= LANDSBY.maksStorrelse) return [{ type: 'feil', tekst: 'Landsbyen er så stor den kan bli!' }];
+  if (!LANDSBY.matverdi[vare]) return [{ type: 'feil', tekst: 'Det er ikke mat.' }];
+  const n = Math.min(LANDSBY.leveranse, spill.lager[vare] || 0);
+  if (n <= 0) return [{ type: 'feil', tekst: 'Du har ikke noe å gi.', mangler: { [vare]: LANDSBY.leveranse } }];
+  const { mat, variasjon } = matVerdi(spill, verden, i, vare, n);
+  spill.lager[vare] -= n;
+  l.sisteMat = vare;
+  spill.stat.matLevert += n;
+  spill.stat.matTyper |= MATBIT[vare];
+  const hendelser = [{ type: 'mat', i, vare, antall: n, mat, variasjon }];
+  return hendelser.concat(voks(spill, verden, i, l, mat), sjekkMaal(spill));
+}
+
+// ---------------------------------------------------------------------------
+// Oppdrag
+// ---------------------------------------------------------------------------
+/** Nytt oppdrag: en vare spilleren kan skaffe, i en mengde som passer landsbyens størrelse. */
+function nyttOppdrag(spill, verden, i, l) {
+  l.oppdragNr = (l.oppdragNr ?? 0) + 1;
+  const tilf = lagTilfeldig(blandSeed(verden.seed, 'oppdrag', i, l.oppdragNr));
+  const inntekt = inntektPerDag(spill, verden);
+  const kan = Object.keys(MARKED.pris).filter((v) => inntekt[v] > 0 || (spill.lager[v] || 0) > 0);
+  const vare = tilf.velg(kan.length ? kan : ['tre', 'korn']);
+  const antall = Math.round((OPPDRAG.grunn + OPPDRAG.perStorrelse * l.str) / (MARKED.pris[vare] >= 4 ? 2 : 1));
+  return {
+    vare, antall,
+    mynter: Math.round(antall * MARKED.pris[vare] * OPPDRAG.belonningsfaktor),
+    mat: Math.round(antall * OPPDRAG.matAndel * (LANDSBY.matverdi[vare] ?? 1)),
+  };
+}
+
+export function leverOppdrag(spill, verden, i) {
+  const l = landsby(spill, verden, i);
+  const o = l.oppdrag;
+  if (!o) return [{ type: 'feil', tekst: 'Landsbyen har ikke noe oppdrag akkurat nå.' }];
+  if (!kobletTilLeiren(spill, verden, i)) return [{ type: 'feil', tekst: 'Bygg vei til landsbyen først.' }];
+  const kost = { [o.vare]: o.antall };
+  if (!harRad(spill, kost)) return [{ type: 'feil', tekst: 'Du har ikke nok ennå.', mangler: kost }];
+  trekk(spill, kost);
+  gi(spill, { mynter: o.mynter });
+  l.oppdrag = null;
+  l.pause = OPPDRAG.pauseDager; // en liten pause før neste oppdrag
+  spill.stat.oppdrag++;
+  const hendelser = [{ type: 'oppdragFerdig', i, mynter: o.mynter, tekst: `📜 Oppdrag fullført for ${verden.landsbynavn.get(i)}! +${o.mynter} 🪙` }];
+  return hendelser.concat(voks(spill, verden, i, l, o.mat), sjekkMaal(spill));
 }
 
 /** Hva får man for å selge `antall` av en vare i landsbyen nå? (Prisen faller for hver vare.) */
