@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Bygg – kartverksted</title>
+  <link rel="stylesheet" href="stil.css">
+</head>
+<body>
+  <header class="topp">
+    <h1>Bygg <span class="fase">kartverksted</span></h1>
+    <a href="index.html" class="til-spill">🎮 Til spillet</a>
+    <div class="kontroller">
+      <button id="forrige" title="Forrige verden">◀</button>
+      <label class="seed">Verden nr.
+        <input id="seed" type="number" inputmode="numeric" min="0">
+      </label>
+      <button id="neste" title="Neste verden">▶</button>
+      <button id="tilfeldig" class="hoved">🎲 Ny verden</button>
+      <select id="storrelse" title="Kartstørrelse">
+        <option value="24">24×24</option>
+        <option value="32" selected>32×32</option>
+        <option value="40">40×40</option>
+        <option value="48">48×48</option>
+      </select>
+    </div>
+    <div class="brytere">
+      <button id="hele-kartet" title="Vis hele kartet">🗺️ Hele kartet</button>
+      <button id="til-start" title="Gå til startruta">⭐ Start</button>
+      <label><input type="checkbox" id="vis-taake"> Tåke</label>
+      <label><input type="checkbox" id="vis-farger"> Fargekart</label>
+      <label><input type="checkbox" id="vis-rutenett"> Rutenett</label>
+      <label><input type="checkbox" id="vis-info" checked> Info</label>
+    </div>
+  </header>
+
+  <main>
+    <canvas id="lerret"></canvas>
+    <aside id="info" class="panel">
+      <h2>Verden <span id="info-seed"></span></h2>
+      <p id="info-forsok" class="liten"></p>
+      <table id="info-terreng"></table>
+      <h3>På kartet</h3>
+      <table id="info-overlegg"></table>
+      <h3>Valgt rute</h3>
+      <p id="info-rute" class="liten">Trykk på en rute.</p>
+      <button id="partest">Test 100 verdener</button>
+      <pre id="partest-resultat" class="liten"></pre>
+    </aside>
+  </main>
+
+  <script type="module" src="js/verksted.js"></script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#f6f1e4">
+  <title>Bygg</title>
+  <link rel="stylesheet" href="spill.css">
+</head>
+<body>
+  <header id="hud">
+    <div id="ravarer" class="ravarer"></div>
+    <div class="hud-hoyre">
+      <div class="dag">Dag <b id="dag">1</b></div>
+      <button id="meny-knapp" class="rund" aria-label="Meny">☰</button>
+    </div>
+  </header>
+
+  <main>
+    <canvas id="lerret"></canvas>
+
+    <section id="maal" class="kort maal">
+      <h2 id="maal-tittel" role="button" tabindex="0">🎯 Mål <span class="pil">▾</span></h2>
+      <ul id="maal-liste"></ul>
+    </section>
+
+    <div id="meldinger" aria-live="polite"></div>
+
+    <section id="rutepanel" class="kort rutepanel" hidden>
+      <button id="lukk-panel" class="lukk" aria-label="Lukk">✕</button>
+      <div id="rutepanel-innhold"></div>
+    </section>
+
+    <div class="bunnknapper">
+      <button id="hjem" class="rund" aria-label="Til leiren" title="Til leiren">🏠</button>
+      <div id="avdekk-pris" class="merke" title="Trykk på en ?-rute i tåka for å avdekke den"></div>
+      <button id="ny-dag" class="ny-dag">☀️<span>Ny dag</span></button>
+    </div>
+  </main>
+
+  <dialog id="meny" class="kort meny">
+    <h2>Bygg</h2>
+    <p class="liten" id="meny-info"></p>
+    <div class="menyknapper">
+      <button id="lyd-knapp"></button>
+      <button id="vis-kode">💾 Lagrekode</button>
+      <button id="les-kode">📥 Last inn lagrekode</button>
+      <button id="nytt-spill">🌍 Nytt spill (ny verden)</button>
+      <a class="knapp" href="verksted.html">🗺️ Kartverksted</a>
+      <button id="lukk-meny" class="hoved">Fortsett å spille</button>
+    </div>
+    <div id="kode-felt" hidden>
+      <p class="liten" id="kode-tekst"></p>
+      <textarea id="kode" rows="4" spellcheck="false"></textarea>
+      <div class="menyknapper">
+        <button id="kode-ok" class="hoved"></button>
+      </div>
+    </div>
+  </dialog>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

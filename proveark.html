@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="nb">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bygg – prøveark</title>
+  <style>
+    :root { --panel: #f6f1e4; --kant: #c9bfa6; --tekst: #2b2a26; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #010101; color: #e9e3cf; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    header {
+      position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
+      padding: 8px 14px; background: var(--panel); color: var(--tekst); border-bottom: 3px solid var(--kant);
+    }
+    header h1 { margin: 0; font-size: 18px; }
+    header label { font-size: 14px; display: flex; align-items: center; gap: 6px; }
+    button, a.knapp {
+      font: inherit; font-size: 15px; min-height: 40px; padding: 4px 12px; border-radius: 10px;
+      border: 2px solid var(--kant); background: #fff; color: var(--tekst); cursor: pointer; text-decoration: none;
+      display: inline-flex; align-items: center;
+    }
+    main { padding: 16px; display: grid; gap: 24px; justify-items: center; }
+    h2 { font-size: 15px; font-weight: 600; margin: 0 0 8px; color: #cfc6ad; text-align: center; }
+    canvas { display: block; }
+    .galleri { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; max-width: 1100px; }
+    .galleri figure { margin: 0; text-align: center; }
+    .galleri figcaption { font-size: 13px; color: #cfc6ad; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Prøveark – ny brettgrafikk</h1>
+    <button id="ny">🎲 Ny variasjon</button>
+    <label>Rutestørrelse <input id="str" type="range" min="56" max="200" value="112"> <span id="str-tall"></span></label>
+    <a class="knapp" href="index.html">🎮 Til spillet</a>
+  </header>
+  <main>
+    <section>
+      <h2>Et lite brett: utforsket land, tåkekant (?) og valgt rute (gården)</h2>
+      <canvas id="brett"></canvas>
+    </section>
+    <section>
+      <h2>Vei og jernbane: trevei fra leiren til landsbyen, steinvei videre over elva, og jernbane med bru og planovergang</h2>
+      <canvas id="brett2"></canvas>
+    </section>
+    <section>
+      <h2>Alle vei- og jernbaneruter</h2>
+      <div id="galleri2" class="galleri"></div>
+    </section>
+    <section>
+      <h2>Alle rutetyper – tre varianter av hvert terreng</h2>
+      <div id="galleri" class="galleri"></div>
+    </section>
+  </main>
+  <script type="module" src="js/proveark.js"></script>
+</body>
+</html>
