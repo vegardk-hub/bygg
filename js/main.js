@@ -129,6 +129,7 @@ function visPanel() {
     byggVei: () => behandle(S.byggVei(spill, verden, t.valgt)),
     steinvei: (alle) => behandle(S.oppgraderVei(spill, verden, alle ? S.treveierINettet(spill, verden, t.valgt) : [t.valgt])),
     veiHit: () => behandle(S.byggVeiTilLeiren(spill, verden, t.valgt)),
+    veiBygg: () => behandle(S.byggVeiTilBygg(spill, verden, t.valgt)),
     mat: (vare) => behandle(S.giMat(spill, verden, t.valgt, vare)),
     oppdrag: () => behandle(S.leverOppdrag(spill, verden, t.valgt)),
     skip: () => behandle(S.byggSkip(spill)),
@@ -260,6 +261,9 @@ function behandle(hendelser) {
         break;
       case 'dyrFlytter':
         P.melding(h.tekst);
+        break;
+      case 'veibonus':
+        setTimeout(() => { P.melding(h.tekst, 'maal'); lyd('funn'); }, 150);
         break;
       case 'nyRute': {
         const { kx, ky } = midt(h.b);

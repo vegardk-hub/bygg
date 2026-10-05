@@ -135,6 +135,9 @@ export const VEI = {
  */
 export const HANDEL = { perLengde: 5, leirStorrelse: 1 };
 
+/** Et produksjonsbygg med vei rett ved siden av, der veien henger sammen med leiren, lager så mange ganger mer. */
+export const VEI_BONUS = 2;
+
 /**
  * Landsbyer vokser når de får mat. vekst[n] = mat som trengs for å gå fra størrelse n til n+1.
  * Ulike matvarer er verdt ulikt mye, og å gi en annen mat enn sist gir bonus (variasjon er sunt!).

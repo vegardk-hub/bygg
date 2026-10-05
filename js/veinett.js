@@ -154,6 +154,17 @@ export function leirIndeks(spill) {
   return -1;
 }
 
+/**
+ * Har rute i en vei rett ved siden av seg som henger sammen med leiren?
+ * (Brukes for veibonusen: bygg med vei til leiren produserer dobbelt.)
+ * `nett` kan sendes inn for å slippe å regne ut nettet på nytt for hvert bygg.
+ */
+export function harVeiTilLeiren(spill, verden, i, nett = nettverk(spill, verden)) {
+  const leirNr = nett.get(leirIndeks(spill));
+  if (leirNr === undefined) return false;
+  return naboer4(verden, i).some((j) => spill.veier.has(j) && nett.get(j) === leirNr);
+}
+
 /** Er stedet bundet til leiren med vei og/eller bygg? */
 export function kobletTilLeiren(spill, verden, i) {
   const leir = leirIndeks(spill);
@@ -215,4 +226,46 @@ export function stederINettet(spill, verden, i) {
   const nr = nett.get(i);
   if (nr === undefined) return [];
   return stederMedNett(spill, verden, nett).filter((s) => s.nett.has(nr)).map((s) => s.i);
+}
+
+/**
+ * Billigste nye vei fra et bygg til leirens nett, så bygget får veibonus:
+ * én av naboene til bygget må bli vei, og veien må nå fram til leirens nett
+ * (en vei, leiren selv eller et bygg som henger sammen med leiren).
+ * Returnerer { ruter: [nye veiruter], broer } eller null.
+ */
+export function finnVeiTilBygg(spill, verden, bygg, { prisLand = 1, prisVann = 3 } = {}) {
+  const nett = nettverk(spill, verden);
+  if (harVeiTilLeiren(spill, verden, bygg, nett)) return { ruter: [], broer: 0 };
+  const leirNr = nett.get(leirIndeks(spill));
+  const iLeirNett = (t) => nett.get(t) === leirNr;
+  const erMaal = (t) => (spill.veier.has(t) && iLeirNett(t)) || naboer4(verden, t).some(iLeirNett);
+  const kost = (t) => (spill.veier.has(t) ? 0 : kanHaVei(spill, verden, t) ? (verden.terreng[t] === T.VANN ? prisVann : prisLand) : Infinity);
+  const avstand = new Map(), forrige = new Map(), apne = [];
+  for (const j of naboer4(verden, bygg)) {
+    const k = kost(j);
+    if (k === Infinity) continue;
+    avstand.set(j, k); forrige.set(j, -1); apne.push(j);
+  }
+  while (apne.length) {
+    let m = 0;
+    for (let k = 1; k < apne.length; k++) if (avstand.get(apne[k]) < avstand.get(apne[m])) m = k;
+    const t = apne.splice(m, 1)[0];
+    if (erMaal(t)) {
+      const ruter = [];
+      for (let c = t; c !== -1; c = forrige.get(c)) if (!spill.veier.has(c)) ruter.push(c);
+      ruter.reverse();
+      return { ruter, broer: ruter.filter((r) => verden.terreng[r] === T.VANN).length };
+    }
+    for (const j of naboer4(verden, t)) {
+      const k = kost(j);
+      if (k === Infinity) continue;
+      const ny = avstand.get(t) + k;
+      if (!avstand.has(j) || ny < avstand.get(j)) {
+        if (!avstand.has(j)) apne.push(j);
+        avstand.set(j, ny); forrige.set(j, t);
+      }
+    }
+  }
+  return null;
 }

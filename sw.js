@@ -1,7 +1,7 @@
 // Service worker: gjør at spillet virker uten nett og kan legges på Hjem-skjermen.
 // Strategi «svar fra lageret, oppdater i bakgrunnen»: spillet starter med en gang,
 // og neste gang det åpnes, har det den nyeste versjonen fra GitHub.
-const LAGER = 'bygg-v5';
+const LAGER = 'bygg-v6';
 const FILER = [
   './', 'index.html', 'spill.css', 'manifest.webmanifest',
   'ikoner/ikon-180.png', 'ikoner/ikon-192.png', 'ikoner/ikon-512.png',

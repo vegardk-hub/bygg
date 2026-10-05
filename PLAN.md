@@ -269,3 +269,7 @@ mørkere kanter, svart bakgrunn `#010101`, klammer `#faf2db`). All grafikk er te
 - Balanse: avdekkingsprisen regnes nå per verden (ny øy = frisk start, kartstjerner gir rabatt). 100-dagers simulering på tre kart: handel 40–260 🪙/dag.
 - Lagring versjon 5. Tester: regler, vei/handel, skip/verdener, hendelser (Node) + nettleser.
 - Merk ved utvikling: service workeren gir gammel kode første gang etter en endring (last på nytt to ganger, eller avregistrer i DevTools).
+
+## Etter brukertest (2026-10-05)
+- **Veibonus:** et produksjonsbygg med vei rett ved siden av, der veien henger sammen med leiren, lager dobbelt (`VEI_BONUS` i balanse.js).
+  Byggpanelet viser tips og «Bygg vei hit fra leiren» (billigste vei, `finnVeiTilBygg` i veinett.js). Gjelder også verdener du er borte fra.

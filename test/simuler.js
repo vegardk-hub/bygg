@@ -110,6 +110,27 @@ const DAGER = Number(process.argv[3] ?? 60);
   // Vei kan ikke bygges i tåka eller på fjell.
   const fersk = nyttSpill(seed, 32);
   assert.equal(byggVei(fersk.spill, fersk.verden, 0)[0].type, 'feil');
+  // Veibonus: et bygg ved en vei som henger sammen med leiren lager dobbelt.
+  const veiRute = plan.ruter[Math.floor(plan.ruter.length / 2)];
+  const ved = [veiRute - 1, veiRute + 1, veiRute - B, veiRute + B].find((j) => muligeBygg(spill, verden, j).length);
+  if (ved !== undefined) {
+    const type = muligeBygg(spill, verden, ved)[0];
+    const medVei = produksjon(spill, verden, ved, type, 1);
+    spill.veier.delete(veiRute);
+    const utenVei = produksjon(spill, verden, ved, type, 1);
+    spill.veier.set(veiRute, 'stein');
+    const r = Object.keys(medVei.gave)[0];
+    assert.ok(medVei.vei && !utenVei.vei, 'veibonus avhenger av veien');
+    assert.equal(medVei.gave[r], utenVei.gave[r] * 2, 'vei til leiren gir dobbel produksjon');
+  }
+  // «Bygg vei hit» til et bygg langt unna gir det veibonus.
+  const fjern = [...Array(B * B).keys()].filter((j) => muligeBygg(spill, verden, j).includes('gard'))
+    .sort((a, b) => Math.hypot((b % B) - verden.start.x, Math.floor(b / B) - verden.start.y) - Math.hypot((a % B) - verden.start.x, Math.floor(a / B) - verden.start.y))[0];
+  bygg(spill, verden, fjern, 'gard');
+  assert.equal(produksjon(spill, verden, fjern).vei, false);
+  const hv = Spill.byggVeiTilBygg(spill, verden, fjern);
+  assert.ok(hv.some((e) => e.type === 'veibonus'), 'vei til bygget bygget');
+  assert.equal(produksjon(spill, verden, fjern).vei, true, 'bygget har nå veibonus');
   console.log(`✓ vei- og handelstester ok (rute ${forStein} → ${handelsruter(spill, verden)[0].mynter} 🪙/dag med stein)`);
 }
 

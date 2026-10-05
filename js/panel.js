@@ -329,13 +329,28 @@ export function visRutepanel(spill, verden, i, h) {
       html += '</div><p class="liten">Tips: landsbyer som er koblet til leiren med vei, betaler bedre.</p>';
     } else if (b.type === 'havn') {
       html += havnHtml(spill);
-    } else if (b.nivaa < MAKS_NIVAA) {
+    }
+    if (def.ravare && !prod.vei) {
+      const plan = S.veiTilByggPlan(spill, verden, i);
+      html += '<p class="info-linje">💡 Med vei til leiren lager bygget dobbelt så mye!</p>';
+      if (plan && plan.ruter.length) {
+        html += `<div class="valg">${valgKnapp({
+          ikon: '🛤️', navn: 'Bygg vei hit fra leiren', gir: `× 2 ${gaveTekst(prod.gave).split(' ').pop()}`, kost: plan.kost, lager: spill.lager,
+          forklaring: `${plan.ruter.length} ruter${plan.broer ? `, ${plan.broer} bru` : ''}`, data: 'data-vei-bygg',
+        })}</div>`;
+      } else if (!plan) {
+        html += '<p class="liten">Fant ingen vei hit ennå – avdekk mer av kartet mellom bygget og leiren.</p>';
+      }
+    } else if (prod.vei) {
+      html += '<p class="liten">🛤️ Har vei til leiren – lager dobbelt.</p>';
+    }
+    if (b.type !== 'leir' && b.type !== 'havn' && b.nivaa < MAKS_NIVAA) {
       const kost = S.oppgraderKost(spill, i);
       const neste = S.produksjon(spill, verden, i, b.type, b.nivaa + 1);
       html += `<div class="valg">${valgKnapp({
         ikon: '⬆️', navn: `Oppgrader til nivå ${b.nivaa + 1}`, gir: `${gaveTekst(neste.gave)}/dag`, kost, lager: spill.lager, data: 'data-oppgrader',
       })}</div>`;
-    } else {
+    } else if (b.type !== 'leir' && b.type !== 'havn') {
       html += '<p class="liten">⭐ Høyeste nivå!</p>';
     }
   } else if (o?.type === 'landsby') {
@@ -364,7 +379,7 @@ export function visRutepanel(spill, verden, i, h) {
       const bru = verden.terreng[i] === T.VANN;
       valg.push(valgKnapp({
         ikon: '🛤️', navn: bru ? 'Bygg bru' : 'Bygg trevei', kost: S.veiKost(verden, i), lager: spill.lager,
-        forklaring: o?.type === 'dyr' ? 'Dyret flytter seg litt unna.' : 'Veier mellom leiren og landsbyer gir handel.', data: 'data-vei',
+        forklaring: o?.type === 'dyr' ? 'Dyret flytter seg litt unna.' : 'Vei til landsbyer gir handel – og bygg med vei til leiren lager dobbelt.', data: 'data-vei',
       }));
     }
     if (valg.length) html += `<div class="valg">${valg.join('')}</div>`;
@@ -379,6 +394,7 @@ export function visRutepanel(spill, verden, i, h) {
   koble('[data-vei]', () => h.byggVei());
   koble('[data-steinvei]', (k) => h.steinvei(k.dataset.steinvei === 'alle'));
   koble('[data-vei-hit]', () => h.veiHit());
+  koble('[data-vei-bygg]', () => h.veiBygg());
   koble('[data-mat]', (k) => h.mat(k.dataset.mat));
   koble('[data-oppdrag]', () => h.oppdrag());
   koble('[data-skip]', () => h.skip());

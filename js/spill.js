@@ -9,11 +9,12 @@ import { navngiLandsbyer } from './navn.js';
 import { T, START } from './data/terreng.js';
 import {
   START_LAGER, AVDEKK, BYGG, BYGG_KOSTVEKST, NIVAA, OPPGRADER_KOSTVEKST, MAKS_NIVAA, PRIS, FUNN,
-  RAVARE_REKKEFOLGE, VEI, LANDSBY, MARKED, OPPDRAG, SKIP, REISE, BIOM, HENDELSE, RAVARER,
+  RAVARE_REKKEFOLGE, VEI, LANDSBY, MARKED, OPPDRAG, SKIP, REISE, BIOM, HENDELSE, RAVARER, VEI_BONUS,
 } from './data/balanse.js';
 import { MAAL, SYNLIGE_MAAL } from './data/maal.js';
 import {
   kanHaVei, nettverk, handelsruter, kobletTilLeiren, finnVeiTilLeiren, stedNavn, naboer4, stederINettet,
+  harVeiTilLeiren, finnVeiTilBygg,
 } from './veinett.js';
 import { blandSeed, lagTilfeldig } from './rng.js';
 
@@ -328,7 +329,7 @@ export function oppgrader(spill, verden, i) {
 // Produksjon
 // ---------------------------------------------------------------------------
 /** Hva et bygg (eller et tenkt bygg av `type` på rute i) lager per dag, med forklaring. */
-export function produksjon(spill, verden, i, type = spill.bygg.get(i)?.type, nivaa = spill.bygg.get(i)?.nivaa ?? 1) {
+export function produksjon(spill, verden, i, type = spill.bygg.get(i)?.type, nivaa = spill.bygg.get(i)?.nivaa ?? 1, nett) {
   const def = BYGG[type];
   if (!def) return null;
   if (type === 'leir') return { gave: { ...def.gir }, forklaring: '' };
@@ -340,18 +341,22 @@ export function produksjon(spill, verden, i, type = spill.bygg.get(i)?.type, niv
   }
   if (def.nabo.dyr) bonus += dyrRundt(verden, i) * def.nabo.pr;
   const gang = nivaa > 1 ? NIVAA[nivaa].gang : 1;
-  const mengde = (def.grunn + bonus) * gang;
+  // Veibonus: vei rett ved siden av, koblet til leiren → varene kommer lett fram, dobbel produksjon.
+  const vei = harVeiTilLeiren(spill, verden, i, nett);
+  const mengde = (def.grunn + bonus) * gang * (vei ? VEI_BONUS : 1);
   const deler = def.grunn ? [`${def.grunn} grunn`] : [];
   if (bonus) deler.push(`${def.grunn ? '+' : ''}${bonus} fra naboer`);
   if (!def.grunn && !bonus) deler.push('ingen naboer som gir noe ennå');
   if (gang > 1) deler.push(`× ${gang} (nivå ${nivaa})`);
-  return { gave: { [def.ravare]: mengde }, forklaring: deler.join(' ') };
+  if (vei) deler.push(`× ${VEI_BONUS} (vei til leiren)`);
+  return { gave: { [def.ravare]: mengde }, forklaring: deler.join(' '), vei };
 }
 
 export function inntektPerDag(spill, verden) {
   const sum = Object.fromEntries(RAVARE_REKKEFOLGE.map((r) => [r, 0]));
+  const nett = nettverk(spill, verden);
   for (const i of spill.bygg.keys()) {
-    for (const [r, n] of Object.entries(produksjon(spill, verden, i).gave)) sum[r] += n;
+    for (const [r, n] of Object.entries(produksjon(spill, verden, i, undefined, undefined, nett).gave)) sum[r] += n;
   }
   for (const rute of handelsruter(spill, verden)) sum.mynter += rute.mynter;
   return sum;
@@ -359,8 +364,9 @@ export function inntektPerDag(spill, verden) {
 
 export function nyDag(spill, verden) {
   const hendelser = [];
+  const nett = nettverk(spill, verden);
   for (const i of spill.bygg.keys()) {
-    const { gave } = produksjon(spill, verden, i);
+    const { gave } = produksjon(spill, verden, i, undefined, undefined, nett);
     gi(spill, gave);
     hendelser.push({ type: 'produsert', i, gave });
   }
@@ -470,8 +476,9 @@ function produserBorte(spill, w) {
   const verden = lagVerden(w);
   const vis = { ...w, stat: { ...TOM_STAT } }; // regelfunksjonene trenger et «spill» å se på
   const sum = {};
+  const nett = nettverk(vis, verden);
   for (const i of w.bygg.keys()) {
-    for (const [r, n] of Object.entries(produksjon(vis, verden, i).gave)) {
+    for (const [r, n] of Object.entries(produksjon(vis, verden, i, undefined, undefined, nett).gave)) {
       if (r === 'mynter') { gi(spill, { mynter: n }); continue; }
       const for_ = w.lager[r] || 0;
       // Taket stopper bare videre oppsamling – det tar aldri bort noe man allerede har.
@@ -592,7 +599,7 @@ export function seil(spill, verden, mal) {
 // ---------------------------------------------------------------------------
 // Veier
 // ---------------------------------------------------------------------------
-export { kanHaVei, handelsruter, kobletTilLeiren, stedNavn, stederINettet };
+export { kanHaVei, handelsruter, kobletTilLeiren, stedNavn, stederINettet, harVeiTilLeiren };
 
 export function veiKost(verden, i) {
   return verden.terreng[i] === T.VANN ? { ...VEI.tre.bruKost } : { ...VEI.tre.kost };
@@ -682,6 +689,28 @@ export function byggVeiTilLeiren(spill, verden, i) {
   for (const r of plan.ruter) leggVei(spill, verden, r, dyr);
   oppdaterKoblet(spill, verden);
   return [{ type: 'vei', ruter: plan.ruter }, ...dyr, ...nyeRuter(spill, verden, for_)].concat(sjekkMaal(spill));
+}
+
+/** Billigste vei fra et bygg til leiren (for veibonusen): ruter og kostnad. */
+export function veiTilByggPlan(spill, verden, i) {
+  const plan = finnVeiTilBygg(spill, verden, i);
+  if (!plan) return null;
+  return { ...plan, kost: sum(plan.ruter.map((r) => veiKost(verden, r))) };
+}
+
+export function byggVeiTilBygg(spill, verden, i) {
+  const plan = veiTilByggPlan(spill, verden, i);
+  if (!plan) return [{ type: 'feil', tekst: 'Fant ingen vei hit ennå – avdekk mer av kartet mellom bygget og leiren.' }];
+  if (!plan.ruter.length) return [{ type: 'feil', tekst: 'Bygget har allerede vei til leiren.' }];
+  if (!harRad(spill, plan.kost)) return [{ type: 'feil', tekst: 'Du har ikke nok til hele veien.', mangler: plan.kost }];
+  const for_ = handelsruter(spill, verden);
+  trekk(spill, plan.kost);
+  const dyr = [];
+  for (const r of plan.ruter) leggVei(spill, verden, r, dyr);
+  oppdaterKoblet(spill, verden);
+  const navn = BYGG[spill.bygg.get(i)?.type]?.navn ?? 'Bygget';
+  return [{ type: 'vei', ruter: plan.ruter }, ...dyr, { type: 'veibonus', i, tekst: `🛤️ ${navn} har vei til leiren og lager nå dobbelt!` },
+    ...nyeRuter(spill, verden, for_)].concat(sjekkMaal(spill));
 }
 
 /** Treveiene i samme nett som rute i (for «gjør hele veien om til stein»). */
